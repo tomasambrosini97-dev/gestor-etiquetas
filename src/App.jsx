@@ -1,16 +1,20 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
 // ─── Helpers ───
-const STORAGE_KEYS = { zones: "3pl-zones-v1", carriers: "3pl-carriers-v1" };
-
-async function loadStorage(key) {
+async function loadConfig() {
   try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+    const res = await fetch('/api/config');
+    const data = await res.json();
+    return data;
+  } catch { return { zones: [], carriers: [] }; }
 }
-async function saveStorage(key, val) {
-  try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { console.error(e); }
+
+async function saveZones(zones) {
+  try { await fetch('/api/zones', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(zones) }); } catch (e) { console.error(e); }
+}
+
+async function saveCarriers(carriers) {
+  try { await fetch('/api/carriers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(carriers) }); } catch (e) { console.error(e); }
 }
 
 function parseZPL(text) {
@@ -682,20 +686,19 @@ export default function App() {
   const [shipments, setShipments] = useState(null);
   const [loaded, setLoaded] = useState(false);
 
-  // Load from storage
+  // Load from server
   useEffect(() => {
     (async () => {
-      const z = await loadStorage(STORAGE_KEYS.zones);
-      const c = await loadStorage(STORAGE_KEYS.carriers);
-      if (z) setZones(z);
-      if (c) setCarriers(c);
+      const config = await loadConfig();
+      setZones(config.zones || []);
+      setCarriers(config.carriers || []);
       setLoaded(true);
     })();
   }, []);
 
   // Save on change
-  useEffect(() => { if (loaded) saveStorage(STORAGE_KEYS.zones, zones); }, [zones, loaded]);
-  useEffect(() => { if (loaded) saveStorage(STORAGE_KEYS.carriers, carriers); }, [carriers, loaded]);
+  useEffect(() => { if (loaded) saveZones(zones); }, [zones, loaded]);
+  useEffect(() => { if (loaded) saveCarriers(carriers); }, [carriers, loaded]);
 
   const handleParsed = (s) => {
     setShipments(s);
