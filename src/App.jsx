@@ -37,6 +37,7 @@ function parseZPL(text) {
     let envioNum = null;
     let destinatario = null;
     let localidad = null;
+    let tipoEnvio = null;
 
     if (isFlex) {
       // FLEX: CP is the big one below QR
@@ -44,10 +45,12 @@ function parseZPL(text) {
       const envM = lab.match(/Envio: (\d+)/);
       const destM = lab.match(/Destinatario: ([^\^(]+)/);
       const locM = lab.match(/FO0,660.*?FD([^\^]+)/);
+      const tipoM = lab.match(/FO0,770.*?FD([^\^]+)/);
       if (cpM) cp = cpM[1];
       if (envM) envioNum = envM[1];
       if (destM) destinatario = destM[1].trim();
       if (locM) localidad = locM[1].replace(/_C3_[A-F0-9]{2}/g, "").trim();
+      if (tipoM) tipoEnvio = tipoM[1].trim();
     } else {
       // COLECTA: CP from text pattern, deduplicated
       const cpMatches = lab.match(/CP[:\s]+(\d{4})/g);
@@ -63,6 +66,7 @@ function parseZPL(text) {
       envio: envioNum,
       destinatario,
       localidad,
+      tipoEnvio,
       items: [{ sku, qty }],
       rawLabel: lab,
     });
@@ -225,36 +229,89 @@ function CarriersPanel({ carriers, setCarriers }) {
   const [name, setName] = useState("");
   const [cps, setCps] = useState("");
   const [limit, setLimit] = useState("");
+  const [priorityCps, setPriorityCps] = useState("");
+  const [priority, setPriority] = useState("COMERCIAL");
 
   const add = () => {
     if (!name.trim() || !cps.trim()) return;
     const cpList = cps.split(/[,;\s]+/).map((c) => c.trim()).filter(Boolean);
-    setCarriers((prev) => [...prev, { id: Date.now(), name: name.trim(), cps: cpList, limit: limit ? parseInt(limit) : null }]);
-    setName(""); setCps(""); setLimit("");
+    const prioCpList = priorityCps.trim() ? priorityCps.split(/[,;\s]+/).map((c) => c.trim()).filter(Boolean) : [];
+    setCarriers((prev) => [...prev, {
+      id: Date.now(),
+      name: name.trim(),
+      cps: cpList,
+      limit: limit ? parseInt(limit) : null,
+      priorityCps: prioCpList,
+      priority,
+    }]);
+    setName(""); setCps(""); setLimit(""); setPriorityCps(""); setPriority("COMERCIAL");
   };
   const remove = (id) => setCarriers((prev) => prev.filter((c) => c.id !== id));
+  const togglePriority = (id) => {
+    setCarriers((prev) => prev.map((c) =>
+      c.id === id ? { ...c, priority: c.priority === "COMERCIAL" ? "RESIDENCIAL" : "COMERCIAL" } : c
+    ));
+  };
 
   return (
     <Card title="Transportistas" icon="🚛" accent="#4ade80">
       <p style={{ color: "#8b949e", fontSize: 13, margin: "0 0 16px 0" }}>
-        Cada transportista tiene CPs asignados y un tope opcional de envíos.
+        Cada transportista tiene CPs asignados, un tope opcional, CPs prioritarios y prioridad por tipo de envío.
       </p>
-      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-        <Input value={name} onChange={setName} placeholder="Nombre" style={{ flex: "1 1 120px" }} />
-        <Input value={cps} onChange={setCps} placeholder="CPs: 1000, 1001, 1036" style={{ flex: "2 1 220px" }} />
-        <Input value={limit} onChange={setLimit} placeholder="Tope (vacío=sin tope)" type="number" style={{ flex: "0 1 140px" }} />
-        <Btn onClick={add} variant="primary" disabled={!name.trim() || !cps.trim()}>+ Agregar</Btn>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Input value={name} onChange={setName} placeholder="Nombre" style={{ flex: "1 1 120px" }} />
+          <Input value={cps} onChange={setCps} placeholder="CPs asignados: 1000, 1001, 1036" style={{ flex: "2 1 220px" }} />
+          <Input value={limit} onChange={setLimit} placeholder="Tope (vacío=sin tope)" type="number" style={{ flex: "0 1 140px" }} />
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <Input value={priorityCps} onChange={setPriorityCps} placeholder="CPs prioritarios (opcional): 1400, 1401" style={{ flex: "2 1 250px" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flex: "0 0 auto" }}>
+            <span style={{ color: "#8b949e", fontSize: 12 }}>Priorizar:</span>
+            <button
+              onClick={() => setPriority(priority === "COMERCIAL" ? "RESIDENCIAL" : "COMERCIAL")}
+              style={{
+                background: priority === "COMERCIAL" ? "#1a3328" : "#1a2942",
+                color: priority === "COMERCIAL" ? "#4ade80" : "#60a5fa",
+                border: `1px solid ${priority === "COMERCIAL" ? "#2a5a40" : "#2a4a6b"}`,
+                borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer",
+              }}
+            >
+              {priority}
+            </button>
+          </div>
+          <Btn onClick={add} variant="primary" disabled={!name.trim() || !cps.trim()}>+ Agregar</Btn>
+        </div>
       </div>
       {carriers.length === 0 && <p style={{ color: "#484f58", fontSize: 13, textAlign: "center", padding: 20 }}>No hay transportistas configurados</p>}
       {carriers.map((c) => (
-        <div key={c.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#0d1117", borderRadius: 8, marginBottom: 6, border: "1px solid #21262d" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span style={{ color: "#e6edf3", fontWeight: 600, fontSize: 14 }}>{c.name}</span>
-            {c.limit && <Badge color="orange">Tope: {c.limit}</Badge>}
-            <Badge color="gray">{c.cps.length} CPs</Badge>
-            <CollapsibleCPs cps={c.cps} color="green" />
+        <div key={c.id} style={{ padding: "10px 14px", background: "#0d1117", borderRadius: 8, marginBottom: 6, border: "1px solid #21262d" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: (c.priorityCps && c.priorityCps.length > 0) ? 6 : 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ color: "#e6edf3", fontWeight: 600, fontSize: 14 }}>{c.name}</span>
+              {c.limit && <Badge color="orange">Tope: {c.limit}</Badge>}
+              <button
+                onClick={() => togglePriority(c.id)}
+                style={{
+                  background: (c.priority || "COMERCIAL") === "COMERCIAL" ? "#1a3328" : "#1a2942",
+                  color: (c.priority || "COMERCIAL") === "COMERCIAL" ? "#4ade80" : "#60a5fa",
+                  border: `1px solid ${(c.priority || "COMERCIAL") === "COMERCIAL" ? "#2a5a40" : "#2a4a6b"}`,
+                  borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer",
+                }}
+              >
+                Prioriza: {c.priority || "COMERCIAL"}
+              </button>
+              <Badge color="gray">{c.cps.length} CPs</Badge>
+              <CollapsibleCPs cps={c.cps} color="green" />
+            </div>
+            <Btn variant="ghost" small onClick={() => remove(c.id)}>✕</Btn>
           </div>
-          <Btn variant="ghost" small onClick={() => remove(c.id)}>✕</Btn>
+          {c.priorityCps && c.priorityCps.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+              <span style={{ color: "#8b949e", fontSize: 11 }}>CPs prioritarios:</span>
+              <CollapsibleCPs cps={c.priorityCps} color="purple" previewCount={5} />
+            </div>
+          )}
         </div>
       ))}
     </Card>
@@ -369,11 +426,40 @@ function ResultsDashboard({ shipments, zones, carriers }) {
   const zonedCPs = new Set(zones.flatMap((z) => z.cps));
   const noZone = flex.filter((s) => s.cp && !zonedCPs.has(s.cp));
 
-  // Carrier assignment
+  // Carrier assignment with priorities
   const carrierAssignments = [];
   const assigned = new Set();
+
   for (const c of carriers) {
     const matching = flex.filter((s) => s.cp && c.cps.includes(s.cp) && !assigned.has(s.envio));
+
+    // Sort by priority
+    const priorityType = c.priority || "COMERCIAL";
+    const prioCps = (c.priorityCps || []).map(Number);
+
+    matching.sort((a, b) => {
+      // 1) Type priority: preferred type first
+      const aTypeScore = (a.tipoEnvio === priorityType) ? 0 : 1;
+      const bTypeScore = (b.tipoEnvio === priorityType) ? 0 : 1;
+      if (aTypeScore !== bTypeScore) return aTypeScore - bTypeScore;
+
+      // 2) CP priority: exact match first, then closest numerically
+      if (prioCps.length > 0) {
+        const aCp = Number(a.cp);
+        const bCp = Number(b.cp);
+        const aExact = prioCps.includes(aCp) ? 0 : 1;
+        const bExact = prioCps.includes(bCp) ? 0 : 1;
+        if (aExact !== bExact) return aExact - bExact;
+
+        // Closest to any priority CP
+        const aMinDist = Math.min(...prioCps.map((p) => Math.abs(aCp - p)));
+        const bMinDist = Math.min(...prioCps.map((p) => Math.abs(bCp - p)));
+        if (aMinDist !== bMinDist) return aMinDist - bMinDist;
+      }
+
+      return 0;
+    });
+
     const taken = c.limit ? matching.slice(0, c.limit) : matching;
     const overflow = c.limit ? matching.slice(c.limit) : [];
     taken.forEach((s) => assigned.add(s.envio));
@@ -550,7 +636,7 @@ function ResultsDashboard({ shipments, zones, carriers }) {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid #30363d" }}>
-                {["#Envío", "CP", "Destinatario", "Localidad", "Items", "Transportista"].map((h) => (
+                {["#Envío", "CP", "Tipo", "Destinatario", "Localidad", "Items", "Transportista"].map((h) => (
                   <th key={h} style={{ textAlign: "left", padding: "8px 10px", color: "#8b949e", fontWeight: 600 }}>{h}</th>
                 ))}
               </tr>
@@ -562,6 +648,9 @@ function ResultsDashboard({ shipments, zones, carriers }) {
                   <tr key={s.envio} style={{ borderBottom: "1px solid #21262d" }}>
                     <td style={{ padding: "8px 10px", color: "#e6edf3", fontFamily: "monospace" }}>{s.envio}</td>
                     <td style={{ padding: "8px 10px" }}><Badge color="blue">{s.cp}</Badge></td>
+                    <td style={{ padding: "8px 10px" }}>
+                      <Badge color={s.tipoEnvio === "COMERCIAL" ? "green" : "gray"}>{s.tipoEnvio || "—"}</Badge>
+                    </td>
                     <td style={{ padding: "8px 10px", color: "#c9d1d9", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.destinatario}</td>
                     <td style={{ padding: "8px 10px", color: "#8b949e" }}>{s.localidad}</td>
                     <td style={{ padding: "8px 10px" }}>
