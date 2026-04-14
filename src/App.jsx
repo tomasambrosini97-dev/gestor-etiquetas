@@ -234,6 +234,8 @@ function CarrierCard({ carrier, onRemove, onUpdate, zones }) {
   const [prioCpsInput, setPrioCpsInput] = useState((carrier.priorityCps || []).join(", "));
   const [editingZoneLimits, setEditingZoneLimits] = useState(false);
   const [zoneLimitsInput, setZoneLimitsInput] = useState({});
+  const [editingTotalLimit, setEditingTotalLimit] = useState(false);
+  const [totalLimitInput, setTotalLimitInput] = useState(carrier.limit ? String(carrier.limit) : "");
 
   const togglePriority = () => {
     onUpdate({ ...carrier, priority: (carrier.priority || "COMERCIAL") === "COMERCIAL" ? "RESIDENCIAL" : "COMERCIAL" });
@@ -279,7 +281,30 @@ function CarrierCard({ carrier, onRemove, onUpdate, zones }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span style={{ color: "#e6edf3", fontWeight: 600, fontSize: 14 }}>{carrier.name}</span>
-          {carrier.limit && <Badge color="orange">Tope total: {carrier.limit}</Badge>}
+          {editingTotalLimit ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <Input
+                value={totalLimitInput}
+                onChange={setTotalLimitInput}
+                placeholder="Sin tope"
+                type="number"
+                style={{ width: 80, fontSize: 12, padding: "3px 8px" }}
+              />
+              <Btn small onClick={() => {
+                const num = parseInt(totalLimitInput);
+                onUpdate({ ...carrier, limit: (!isNaN(num) && num > 0) ? num : null });
+                setEditingTotalLimit(false);
+              }}>OK</Btn>
+              <Btn small variant="ghost" onClick={() => setEditingTotalLimit(false)}>✕</Btn>
+            </div>
+          ) : (
+            <button
+              onClick={() => { setTotalLimitInput(carrier.limit ? String(carrier.limit) : ""); setEditingTotalLimit(true); }}
+              style={{ background: "#3b2a1a", color: "#fb923c", border: "1px solid #5a3a1a", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+            >
+              {carrier.limit ? `Tope total: ${carrier.limit}` : "Tope total: ∞"}
+            </button>
+          )}
           <button
             onClick={togglePriority}
             style={{
