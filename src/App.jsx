@@ -229,94 +229,139 @@ function ZonesPanel({ zones, setZones }) {
 }
 
 // ─── Carriers Panel ───
+function CarrierCard({ carrier, onRemove, onUpdate }) {
+  const [editingPrioCps, setEditingPrioCps] = useState(false);
+  const [prioCpsInput, setPrioCpsInput] = useState((carrier.priorityCps || []).join(", "));
+
+  const togglePriority = () => {
+    onUpdate({ ...carrier, priority: (carrier.priority || "COMERCIAL") === "COMERCIAL" ? "RESIDENCIAL" : "COMERCIAL" });
+  };
+
+  const savePrioCps = () => {
+    const cpList = prioCpsInput.trim() ? prioCpsInput.split(/[,;\s]+/).map((c) => c.trim()).filter(Boolean) : [];
+    onUpdate({ ...carrier, priorityCps: cpList });
+    setEditingPrioCps(false);
+  };
+
+  const clearPrioCps = () => {
+    onUpdate({ ...carrier, priorityCps: [] });
+    setPrioCpsInput("");
+    setEditingPrioCps(false);
+  };
+
+  const prio = carrier.priority || "COMERCIAL";
+  const hasPrioCps = carrier.priorityCps && carrier.priorityCps.length > 0;
+
+  return (
+    <div style={{ padding: "12px 14px", background: "#0d1117", borderRadius: 8, marginBottom: 6, border: "1px solid #21262d" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ color: "#e6edf3", fontWeight: 600, fontSize: 14 }}>{carrier.name}</span>
+          {carrier.limit && <Badge color="orange">Tope: {carrier.limit}</Badge>}
+          <button
+            onClick={togglePriority}
+            style={{
+              background: prio === "COMERCIAL" ? "#1a3328" : "#1a2942",
+              color: prio === "COMERCIAL" ? "#4ade80" : "#60a5fa",
+              border: `1px solid ${prio === "COMERCIAL" ? "#2a5a40" : "#2a4a6b"}`,
+              borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer",
+            }}
+          >
+            Prioriza: {prio}
+          </button>
+          <Badge color="gray">{carrier.cps.length} CPs</Badge>
+          <CollapsibleCPs cps={carrier.cps} color="green" />
+        </div>
+        <Btn variant="ghost" small onClick={onRemove}>✕</Btn>
+      </div>
+
+      {/* CPs prioritarios - editable */}
+      <div style={{ marginTop: 8, padding: "8px 10px", background: "#161b22", borderRadius: 6, border: "1px solid #21262d" }}>
+        {editingPrioCps ? (
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ color: "#c084fc", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>CPs prioritarios:</span>
+            <Input
+              value={prioCpsInput}
+              onChange={setPrioCpsInput}
+              placeholder="1400, 1401, 1402..."
+              style={{ flex: "1 1 200px", fontSize: 12, padding: "5px 10px" }}
+            />
+            <Btn small onClick={savePrioCps}>Guardar</Btn>
+            <Btn small variant="ghost" onClick={() => setEditingPrioCps(false)}>Cancelar</Btn>
+          </div>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", flex: 1 }}>
+              <span style={{ color: "#c084fc", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>CPs prioritarios:</span>
+              {hasPrioCps ? (
+                <CollapsibleCPs cps={carrier.priorityCps} color="purple" previewCount={5} />
+              ) : (
+                <span style={{ color: "#484f58", fontSize: 12 }}>Sin configurar</span>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 4 }}>
+              <Btn small variant="secondary" onClick={() => { setPrioCpsInput((carrier.priorityCps || []).join(", ")); setEditingPrioCps(true); }}>
+                {hasPrioCps ? "Editar" : "+ Agregar"}
+              </Btn>
+              {hasPrioCps && <Btn small variant="ghost" onClick={clearPrioCps}>Limpiar</Btn>}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function CarriersPanel({ carriers, setCarriers }) {
   const [name, setName] = useState("");
   const [cps, setCps] = useState("");
   const [limit, setLimit] = useState("");
-  const [priorityCps, setPriorityCps] = useState("");
   const [priority, setPriority] = useState("COMERCIAL");
 
   const add = () => {
     if (!name.trim() || !cps.trim()) return;
     const cpList = cps.split(/[,;\s]+/).map((c) => c.trim()).filter(Boolean);
-    const prioCpList = priorityCps.trim() ? priorityCps.split(/[,;\s]+/).map((c) => c.trim()).filter(Boolean) : [];
     setCarriers((prev) => [...prev, {
       id: Date.now(),
       name: name.trim(),
       cps: cpList,
       limit: limit ? parseInt(limit) : null,
-      priorityCps: prioCpList,
+      priorityCps: [],
       priority,
     }]);
-    setName(""); setCps(""); setLimit(""); setPriorityCps(""); setPriority("COMERCIAL");
+    setName(""); setCps(""); setLimit(""); setPriority("COMERCIAL");
   };
   const remove = (id) => setCarriers((prev) => prev.filter((c) => c.id !== id));
-  const togglePriority = (id) => {
-    setCarriers((prev) => prev.map((c) =>
-      c.id === id ? { ...c, priority: c.priority === "COMERCIAL" ? "RESIDENCIAL" : "COMERCIAL" } : c
-    ));
-  };
+  const update = (updated) => setCarriers((prev) => prev.map((c) => c.id === updated.id ? updated : c));
 
   return (
     <Card title="Transportistas" icon="🚛" accent="#4ade80">
       <p style={{ color: "#8b949e", fontSize: 13, margin: "0 0 16px 0" }}>
-        Cada transportista tiene CPs asignados, un tope opcional, CPs prioritarios y prioridad por tipo de envío.
+        Cada transportista tiene CPs asignados, un tope opcional y prioridad por tipo de envío. Los CPs prioritarios se configuran en cada tarjeta.
       </p>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Input value={name} onChange={setName} placeholder="Nombre" style={{ flex: "1 1 120px" }} />
-          <Input value={cps} onChange={setCps} placeholder="CPs asignados: 1000, 1001, 1036" style={{ flex: "2 1 220px" }} />
-          <Input value={limit} onChange={setLimit} placeholder="Tope (vacío=sin tope)" type="number" style={{ flex: "0 1 140px" }} />
+      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
+        <Input value={name} onChange={setName} placeholder="Nombre" style={{ flex: "1 1 120px" }} />
+        <Input value={cps} onChange={setCps} placeholder="CPs asignados: 1000, 1001, 1036" style={{ flex: "2 1 220px" }} />
+        <Input value={limit} onChange={setLimit} placeholder="Tope (vacío=sin tope)" type="number" style={{ flex: "0 1 130px" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: "0 0 auto" }}>
+          <span style={{ color: "#8b949e", fontSize: 12 }}>Priorizar:</span>
+          <button
+            onClick={() => setPriority(priority === "COMERCIAL" ? "RESIDENCIAL" : "COMERCIAL")}
+            style={{
+              background: priority === "COMERCIAL" ? "#1a3328" : "#1a2942",
+              color: priority === "COMERCIAL" ? "#4ade80" : "#60a5fa",
+              border: `1px solid ${priority === "COMERCIAL" ? "#2a5a40" : "#2a4a6b"}`,
+              borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer",
+            }}
+          >
+            {priority}
+          </button>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <Input value={priorityCps} onChange={setPriorityCps} placeholder="CPs prioritarios (opcional): 1400, 1401" style={{ flex: "2 1 250px" }} />
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flex: "0 0 auto" }}>
-            <span style={{ color: "#8b949e", fontSize: 12 }}>Priorizar:</span>
-            <button
-              onClick={() => setPriority(priority === "COMERCIAL" ? "RESIDENCIAL" : "COMERCIAL")}
-              style={{
-                background: priority === "COMERCIAL" ? "#1a3328" : "#1a2942",
-                color: priority === "COMERCIAL" ? "#4ade80" : "#60a5fa",
-                border: `1px solid ${priority === "COMERCIAL" ? "#2a5a40" : "#2a4a6b"}`,
-                borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer",
-              }}
-            >
-              {priority}
-            </button>
-          </div>
-          <Btn onClick={add} variant="primary" disabled={!name.trim() || !cps.trim()}>+ Agregar</Btn>
-        </div>
+        <Btn onClick={add} variant="primary" disabled={!name.trim() || !cps.trim()}>+ Agregar</Btn>
       </div>
       {carriers.length === 0 && <p style={{ color: "#484f58", fontSize: 13, textAlign: "center", padding: 20 }}>No hay transportistas configurados</p>}
       {carriers.map((c) => (
-        <div key={c.id} style={{ padding: "10px 14px", background: "#0d1117", borderRadius: 8, marginBottom: 6, border: "1px solid #21262d" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: (c.priorityCps && c.priorityCps.length > 0) ? 6 : 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <span style={{ color: "#e6edf3", fontWeight: 600, fontSize: 14 }}>{c.name}</span>
-              {c.limit && <Badge color="orange">Tope: {c.limit}</Badge>}
-              <button
-                onClick={() => togglePriority(c.id)}
-                style={{
-                  background: (c.priority || "COMERCIAL") === "COMERCIAL" ? "#1a3328" : "#1a2942",
-                  color: (c.priority || "COMERCIAL") === "COMERCIAL" ? "#4ade80" : "#60a5fa",
-                  border: `1px solid ${(c.priority || "COMERCIAL") === "COMERCIAL" ? "#2a5a40" : "#2a4a6b"}`,
-                  borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer",
-                }}
-              >
-                Prioriza: {c.priority || "COMERCIAL"}
-              </button>
-              <Badge color="gray">{c.cps.length} CPs</Badge>
-              <CollapsibleCPs cps={c.cps} color="green" />
-            </div>
-            <Btn variant="ghost" small onClick={() => remove(c.id)}>✕</Btn>
-          </div>
-          {c.priorityCps && c.priorityCps.length > 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
-              <span style={{ color: "#8b949e", fontSize: 11 }}>CPs prioritarios:</span>
-              <CollapsibleCPs cps={c.priorityCps} color="purple" previewCount={5} />
-            </div>
-          )}
-        </div>
+        <CarrierCard key={c.id} carrier={c} onRemove={() => remove(c.id)} onUpdate={update} />
       ))}
     </Card>
   );
