@@ -3,18 +3,18 @@ import { useState, useEffect, useRef, useCallback } from "react";
 // ─── Helpers ───
 async function loadConfig() {
   try {
-    const res = await fetch('/api/config');
+    const res = await fetch("/api/config");
     const data = await res.json();
     return data;
   } catch { return { zones: [], carriers: [] }; }
 }
 
 async function saveZones(zones) {
-  try { await fetch('/api/zones', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(zones) }); } catch (e) { console.error(e); }
+  try { await fetch("/api/zones", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(zones) }); } catch (e) { console.error(e); }
 }
 
 async function saveCarriers(carriers) {
-  try { await fetch('/api/carriers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(carriers) }); } catch (e) { console.error(e); }
+  try { await fetch("/api/carriers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(carriers) }); } catch (e) { console.error(e); }
 }
 
 function parseZPL(text) {
@@ -462,50 +462,59 @@ function FileUpload({ onParsed }) {
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [files, setFiles] = useState([]);
   const fileRef = useRef();
 
-  const processText = (text, fileName) => {
+  const addFiles = (newFiles) => {
+    const validFiles = Array.from(newFiles).filter((f) => {
+      if (f.name.endsWith(".zip")) return false;
+      return f.name.endsWith(".txt");
+    });
+    if (Array.from(newFiles).some((f) => f.name.endsWith(".zip"))) {
+      setError("Los archivos ZIP no están soportados. Descomprimí primero y cargá los .txt");
+    }
+    if (validFiles.length === 0 && !Array.from(newFiles).some((f) => f.name.endsWith(".zip"))) {
+      setError("Solo se aceptan archivos .txt");
+      return;
+    }
+    setFiles((prev) => {
+      const existingNames = new Set(prev.map((f) => f.name));
+      const unique = validFiles.filter((f) => !existingNames.has(f.name));
+      return [...prev, ...unique];
+    });
+    if (validFiles.length > 0) setError(null);
+  };
+
+  const removeFile = (name) => {
+    setFiles((prev) => prev.filter((f) => f.name !== name));
+  };
+
+  const processAll = async () => {
+    if (files.length === 0) return;
+    setLoading(true);
+    setError(null);
     try {
-      const shipments = parseZPL(text);
-      if (shipments.length === 0) {
-        setError("No se encontraron etiquetas en el archivo. Asegurate de que sea un TXT con formato ZPL.");
+      const allShipments = [];
+      for (const file of files) {
+        const text = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target.result);
+          reader.onerror = () => reject(new Error("Error leyendo " + file.name));
+          reader.readAsText(file, "utf-8");
+        });
+        const shipments = parseZPL(text);
+        allShipments.push(...shipments);
+      }
+      if (allShipments.length === 0) {
+        setError("No se encontraron etiquetas en ningún archivo.");
+        setLoading(false);
         return;
       }
-      setError(null);
-      onParsed(shipments);
+      onParsed(allShipments);
     } catch (e) {
       setError("Error al procesar: " + e.message);
     }
-  };
-
-  const handleFile = (file) => {
-    if (!file) return;
-    setLoading(true);
-    setError(null);
-
-    if (file.name.endsWith(".zip")) {
-      setError("Los archivos ZIP no están soportados directamente. Descomprimí el ZIP primero y cargá el archivo .txt que tiene adentro.");
-      setLoading(false);
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setLoading(false);
-      processText(e.target.result, file.name);
-    };
-    reader.onerror = () => {
-      setLoading(false);
-      setError("Error al leer el archivo");
-    };
-    reader.readAsText(file, "utf-8");
-  };
-
-  const handleInputChange = (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (file) handleFile(file);
-    // Reset so same file can be loaded again
-    e.target.value = "";
+    setLoading(false);
   };
 
   return (
@@ -513,34 +522,65 @@ function FileUpload({ onParsed }) {
       <div
         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragging(true); }}
         onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setDragging(false); }}
-        onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragging(false); handleFile(e.dataTransfer.files[0]); }}
+        onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragging(false); addFiles(e.dataTransfer.files); }}
         style={{
-          border: `2px dashed ${dragging ? "#238636" : "#30363d"}`, borderRadius: 12, padding: 40,
+          border: `2px dashed ${dragging ? "#238636" : "#30363d"}`, borderRadius: 12, padding: 30,
           textAlign: "center", transition: "all .2s",
           background: dragging ? "#0d1117" : "#161b22",
         }}
       >
         <div style={{ fontSize: 40, marginBottom: 8 }}>📦</div>
         <p style={{ color: "#e6edf3", fontSize: 15, fontWeight: 600, margin: "0 0 4px 0" }}>
-          {loading ? "Procesando..." : "Arrastrá tu archivo TXT acá"}
+          Arrastrá tus archivos TXT acá
         </p>
         <p style={{ color: "#8b949e", fontSize: 13, margin: "0 0 14px 0" }}>
-          o usá el botón de abajo para seleccionar
+          Podés cargar varios archivos a la vez
         </p>
         <label style={{
           display: "inline-block", background: "#238636", color: "#fff", padding: "10px 24px",
-          borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", transition: "background .15s",
+          borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer",
         }}>
-          Seleccionar archivo .txt
+          Seleccionar archivos .txt
           <input
             ref={fileRef}
             type="file"
             accept=".txt"
+            multiple
             style={{ display: "none" }}
-            onChange={handleInputChange}
+            onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }}
           />
         </label>
       </div>
+
+      {/* File queue */}
+      {files.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ color: "#e6edf3", fontSize: 14, fontWeight: 600 }}>
+              {files.length} archivo{files.length !== 1 ? "s" : ""} cargado{files.length !== 1 ? "s" : ""}
+            </span>
+            <Btn small variant="ghost" onClick={() => setFiles([])}>Limpiar todo</Btn>
+          </div>
+          {files.map((f) => (
+            <div key={f.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 12px", background: "#0d1117", borderRadius: 6, border: "1px solid #21262d" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ color: "#8b949e", fontSize: 14 }}>📄</span>
+                <span style={{ color: "#c9d1d9", fontSize: 13 }}>{f.name}</span>
+                <span style={{ color: "#484f58", fontSize: 11 }}>({(f.size / 1024).toFixed(1)} KB)</span>
+              </div>
+              <Btn variant="ghost" small onClick={() => removeFile(f.name)}>✕</Btn>
+            </div>
+          ))}
+          <Btn
+            onClick={processAll}
+            disabled={loading}
+            style={{ width: "100%", padding: "14px 20px", fontSize: 15, justifyContent: "center", borderRadius: 10, marginTop: 4 }}
+          >
+            {loading ? "Procesando..." : "🚀 COMENZAR"}
+          </Btn>
+        </div>
+      )}
+
       {error && (
         <div style={{ padding: "10px 14px", background: "#3b1a1a", border: "1px solid #5a2a2a", borderRadius: 8, color: "#f87171", fontSize: 13 }}>
           ⚠ {error}
