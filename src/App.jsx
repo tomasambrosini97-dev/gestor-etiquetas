@@ -229,9 +229,11 @@ function ZonesPanel({ zones, setZones }) {
 }
 
 // ─── Carriers Panel ───
-function CarrierCard({ carrier, onRemove, onUpdate }) {
+function CarrierCard({ carrier, onRemove, onUpdate, zones }) {
   const [editingPrioCps, setEditingPrioCps] = useState(false);
   const [prioCpsInput, setPrioCpsInput] = useState((carrier.priorityCps || []).join(", "));
+  const [editingZoneLimits, setEditingZoneLimits] = useState(false);
+  const [zoneLimitsInput, setZoneLimitsInput] = useState({});
 
   const togglePriority = () => {
     onUpdate({ ...carrier, priority: (carrier.priority || "COMERCIAL") === "COMERCIAL" ? "RESIDENCIAL" : "COMERCIAL" });
@@ -249,15 +251,35 @@ function CarrierCard({ carrier, onRemove, onUpdate }) {
     setEditingPrioCps(false);
   };
 
+  const startEditZoneLimits = () => {
+    const current = carrier.zoneLimits || {};
+    const inputs = {};
+    zones.forEach((z) => { inputs[z.id] = current[z.id] !== undefined ? String(current[z.id]) : ""; });
+    setZoneLimitsInput(inputs);
+    setEditingZoneLimits(true);
+  };
+
+  const saveZoneLimits = () => {
+    const limits = {};
+    Object.entries(zoneLimitsInput).forEach(([id, val]) => {
+      const num = parseInt(val);
+      if (!isNaN(num) && num > 0) limits[id] = num;
+    });
+    onUpdate({ ...carrier, zoneLimits: limits });
+    setEditingZoneLimits(false);
+  };
+
   const prio = carrier.priority || "COMERCIAL";
   const hasPrioCps = carrier.priorityCps && carrier.priorityCps.length > 0;
+  const zoneLimits = carrier.zoneLimits || {};
+  const hasZoneLimits = Object.keys(zoneLimits).length > 0;
 
   return (
     <div style={{ padding: "12px 14px", background: "#0d1117", borderRadius: 8, marginBottom: 6, border: "1px solid #21262d" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span style={{ color: "#e6edf3", fontWeight: 600, fontSize: 14 }}>{carrier.name}</span>
-          {carrier.limit && <Badge color="orange">Tope: {carrier.limit}</Badge>}
+          {carrier.limit && <Badge color="orange">Tope total: {carrier.limit}</Badge>}
           <button
             onClick={togglePriority}
             style={{
@@ -308,11 +330,54 @@ function CarrierCard({ carrier, onRemove, onUpdate }) {
           </div>
         )}
       </div>
+
+      {/* Topes por zona - editable */}
+      {zones.length > 0 && (
+        <div style={{ marginTop: 6, padding: "8px 10px", background: "#161b22", borderRadius: 6, border: "1px solid #21262d" }}>
+          {editingZoneLimits ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span style={{ color: "#fb923c", fontSize: 12, fontWeight: 600 }}>Topes por zona:</span>
+              {zones.map((z) => (
+                <div key={z.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ color: "#c9d1d9", fontSize: 12, minWidth: 80 }}>{z.name}:</span>
+                  <Input
+                    value={zoneLimitsInput[z.id] || ""}
+                    onChange={(val) => setZoneLimitsInput((prev) => ({ ...prev, [z.id]: val }))}
+                    placeholder="Sin tope"
+                    type="number"
+                    style={{ width: 100, fontSize: 12, padding: "4px 8px" }}
+                  />
+                </div>
+              ))}
+              <div style={{ display: "flex", gap: 4, marginTop: 2 }}>
+                <Btn small onClick={saveZoneLimits}>Guardar</Btn>
+                <Btn small variant="ghost" onClick={() => setEditingZoneLimits(false)}>Cancelar</Btn>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", flex: 1 }}>
+                <span style={{ color: "#fb923c", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>Topes por zona:</span>
+                {hasZoneLimits ? (
+                  zones.filter((z) => zoneLimits[z.id]).map((z) => (
+                    <Badge key={z.id} color="orange">{z.name}: {zoneLimits[z.id]}</Badge>
+                  ))
+                ) : (
+                  <span style={{ color: "#484f58", fontSize: 12 }}>Sin configurar</span>
+                )}
+              </div>
+              <Btn small variant="secondary" onClick={startEditZoneLimits}>
+                {hasZoneLimits ? "Editar" : "+ Configurar"}
+              </Btn>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function CarriersPanel({ carriers, setCarriers }) {
+function CarriersPanel({ carriers, setCarriers, zones }) {
   const [name, setName] = useState("");
   const [cps, setCps] = useState("");
   const [limit, setLimit] = useState("");
@@ -361,7 +426,7 @@ function CarriersPanel({ carriers, setCarriers }) {
       </div>
       {carriers.length === 0 && <p style={{ color: "#484f58", fontSize: 13, textAlign: "center", padding: 20 }}>No hay transportistas configurados</p>}
       {carriers.map((c) => (
-        <CarrierCard key={c.id} carrier={c} onRemove={() => remove(c.id)} onUpdate={update} />
+        <CarrierCard key={c.id} carrier={c} onRemove={() => remove(c.id)} onUpdate={update} zones={zones} />
       ))}
     </Card>
   );
@@ -475,9 +540,12 @@ function ResultsDashboard({ shipments, zones, carriers }) {
   const zonedCPs = new Set(zones.flatMap((z) => z.cps));
   const noZone = flex.filter((s) => s.cp && !zonedCPs.has(s.cp));
 
-  // Carrier assignment with priorities
+  // Carrier assignment with priorities + zone limits
   const carrierAssignments = [];
   const assigned = new Set();
+
+  // Helper: find which zone a CP belongs to
+  const getZoneForCP = (cp) => zones.find((z) => z.cps.includes(cp));
 
   for (const c of carriers) {
     const matching = flex.filter((s) => s.cp && c.cps.includes(s.cp) && !assigned.has(s.envio));
@@ -500,7 +568,6 @@ function ResultsDashboard({ shipments, zones, carriers }) {
         const bExact = prioCps.includes(bCp) ? 0 : 1;
         if (aExact !== bExact) return aExact - bExact;
 
-        // Closest to any priority CP
         const aMinDist = Math.min(...prioCps.map((p) => Math.abs(aCp - p)));
         const bMinDist = Math.min(...prioCps.map((p) => Math.abs(bCp - p)));
         if (aMinDist !== bMinDist) return aMinDist - bMinDist;
@@ -509,8 +576,31 @@ function ResultsDashboard({ shipments, zones, carriers }) {
       return 0;
     });
 
-    const taken = c.limit ? matching.slice(0, c.limit) : matching;
-    const overflow = c.limit ? matching.slice(c.limit) : [];
+    // Apply zone limits + total limit
+    const zoneLimits = c.zoneLimits || {};
+    const zoneCounts = {};
+    const taken = [];
+    const overflow = [];
+
+    for (const s of matching) {
+      // Check total limit
+      if (c.limit && taken.length >= c.limit) {
+        overflow.push(s);
+        continue;
+      }
+      // Check zone limit
+      const zone = getZoneForCP(s.cp);
+      if (zone && zoneLimits[zone.id]) {
+        const count = zoneCounts[zone.id] || 0;
+        if (count >= zoneLimits[zone.id]) {
+          overflow.push(s);
+          continue;
+        }
+        zoneCounts[zone.id] = count + 1;
+      }
+      taken.push(s);
+    }
+
     taken.forEach((s) => assigned.add(s.envio));
     carrierAssignments.push({ carrier: c, shipments: taken, overflow });
   }
@@ -786,7 +876,7 @@ export default function App() {
         {tab === "config" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <ZonesPanel zones={zones} setZones={setZones} />
-            <CarriersPanel carriers={carriers} setCarriers={setCarriers} />
+            <CarriersPanel carriers={carriers} setCarriers={setCarriers} zones={zones} />
           </div>
         )}
 
