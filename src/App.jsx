@@ -72,7 +72,7 @@ function parseZPL(text) {
       localidad,
       tipoEnvio,
       items: [{ sku, qty }],
-      rawLabel: lab,
+      rawLabels: [lab],
     });
   }
   return shipments;
@@ -194,25 +194,184 @@ function CollapsibleCPs({ cps, color = "blue", previewCount = 3 }) {
 function ZonesPanel({ zones, setZones }) {
   const [name, setName] = useState("");
   const [cps, setCps] = useState("");
+  const [conflicts, setConflicts] = useState(null); // { newCps, duplicates: [{cp, zoneName, zoneId}] }
+  const [dupeSelections, setDupeSelections] = useState({}); // cp -> "new" | zoneId
+
+  // Check for existing duplicates on mount
+  const [showExistingDupes, setShowExistingDupes] = useState(false);
+  const [existingDupes, setExistingDupes] = useState([]);
+
+  useEffect(() => {
+    // Detect duplicates across existing zones
+    const cpMap = {};
+    const dupes = [];
+    for (const z of zones) {
+      for (const cp of z.cps) {
+        if (cpMap[cp]) {
+          dupes.push({ cp, zones: [cpMap[cp], z.name] });
+        } else {
+          cpMap[cp] = z.name;
+        }
+      }
+    }
+    // Deduplicate
+    const seen = new Set();
+    const uniqueDupes = dupes.filter((d) => {
+      if (seen.has(d.cp)) return false;
+      seen.add(d.cp);
+      return true;
+    });
+    setExistingDupes(uniqueDupes);
+    if (uniqueDupes.length > 0) setShowExistingDupes(true);
+  }, []);
+
+  const resolveExistingDupe = (cp, keepZoneName) => {
+    setZones((prev) => prev.map((z) => {
+      if (z.name === keepZoneName) return z;
+      return { ...z, cps: z.cps.filter((c) => c !== cp) };
+    }));
+    setExistingDupes((prev) => prev.filter((d) => d.cp !== cp));
+  };
 
   const add = () => {
     if (!name.trim() || !cps.trim()) return;
     const cpList = cps.split(/[,;\s]+/).map((c) => c.trim()).filter(Boolean);
-    setZones((prev) => [...prev, { id: Date.now(), name: name.trim(), cps: cpList }]);
+
+    // Check for duplicates against existing zones
+    const allExistingCps = {};
+    for (const z of zones) {
+      for (const cp of z.cps) {
+        allExistingCps[cp] = { zoneName: z.name, zoneId: z.id };
+      }
+    }
+
+    const duplicates = cpList.filter((cp) => allExistingCps[cp]).map((cp) => ({
+      cp,
+      zoneName: allExistingCps[cp].zoneName,
+      zoneId: allExistingCps[cp].zoneId,
+    }));
+
+    if (duplicates.length > 0) {
+      // Show conflict resolution
+      setConflicts({ name: name.trim(), cpList, duplicates });
+      const defaultSelections = {};
+      duplicates.forEach((d) => { defaultSelections[d.cp] = "new"; });
+      setDupeSelections(defaultSelections);
+    } else {
+      // No conflicts, add directly
+      setZones((prev) => [...prev, { id: Date.now(), name: name.trim(), cps: cpList }]);
+      setName(""); setCps("");
+    }
+  };
+
+  const resolveConflicts = () => {
+    if (!conflicts) return;
+    const cpsToRemoveFromOldZones = {};
+    const cpsForNewZone = [];
+
+    for (const cp of conflicts.cpList) {
+      const dupe = conflicts.duplicates.find((d) => d.cp === cp);
+      if (!dupe) {
+        cpsForNewZone.push(cp);
+      } else if (dupeSelections[cp] === "new") {
+        cpsForNewZone.push(cp);
+        if (!cpsToRemoveFromOldZones[dupe.zoneId]) cpsToRemoveFromOldZones[dupe.zoneId] = [];
+        cpsToRemoveFromOldZones[dupe.zoneId].push(cp);
+      }
+      // If selection is the old zone id, don't add to new zone
+    }
+
+    setZones((prev) => {
+      const updated = prev.map((z) => {
+        if (cpsToRemoveFromOldZones[z.id]) {
+          return { ...z, cps: z.cps.filter((c) => !cpsToRemoveFromOldZones[z.id].includes(c)) };
+        }
+        return z;
+      });
+      return [...updated, { id: Date.now(), name: conflicts.name, cps: cpsForNewZone }];
+    });
+
+    setConflicts(null);
+    setDupeSelections({});
     setName(""); setCps("");
   };
+
   const remove = (id) => setZones((prev) => prev.filter((z) => z.id !== id));
 
   return (
     <Card title="Zonas de envío" icon="🗺️" accent="#60a5fa">
       <p style={{ color: "#8b949e", fontSize: 13, margin: "0 0 16px 0" }}>
-        Agrupaciones de CPs para el resumen. Ej: "CABA Centro" → 1000, 1001, 1036...
+        Agrupaciones de CPs para el resumen. Cada CP solo puede pertenecer a una zona.
       </p>
+
+      {/* Existing duplicates warning */}
+      {showExistingDupes && existingDupes.length > 0 && (
+        <div style={{ padding: 14, background: "#3b2a1a", border: "1px solid #5a3a1a", borderRadius: 8, marginBottom: 12 }}>
+          <p style={{ color: "#fb923c", fontSize: 13, fontWeight: 700, margin: "0 0 10px 0" }}>
+            ⚠ Se encontraron CPs repetidos entre zonas. Elegí dónde querés que quede cada uno:
+          </p>
+          {existingDupes.map((d) => (
+            <div key={d.cp} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+              <Badge color="orange">{d.cp}</Badge>
+              <span style={{ color: "#8b949e", fontSize: 12 }}>está en:</span>
+              {d.zones.map((zName) => (
+                <Btn key={zName} small variant="secondary" onClick={() => resolveExistingDupe(d.cp, zName)}>
+                  Dejar en {zName}
+                </Btn>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add form */}
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
         <Input value={name} onChange={setName} placeholder="Nombre de zona" style={{ flex: "1 1 150px" }} />
         <Input value={cps} onChange={setCps} placeholder="CPs separados por coma: 1000, 1001, 1036" style={{ flex: "2 1 250px" }} />
         <Btn onClick={add} disabled={!name.trim() || !cps.trim()}>+ Agregar</Btn>
       </div>
+
+      {/* Conflict resolution for new zone */}
+      {conflicts && (
+        <div style={{ padding: 14, background: "#1a2942", border: "1px solid #2a4a6b", borderRadius: 8, marginBottom: 12 }}>
+          <p style={{ color: "#60a5fa", fontSize: 13, fontWeight: 700, margin: "0 0 10px 0" }}>
+            Algunos CPs de "{conflicts.name}" ya existen en otras zonas. ¿Dónde los querés dejar?
+          </p>
+          {conflicts.duplicates.map((d) => (
+            <div key={d.cp} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+              <Badge color="blue">{d.cp}</Badge>
+              <span style={{ color: "#8b949e", fontSize: 12 }}>existe en {d.zoneName}:</span>
+              <button
+                onClick={() => setDupeSelections((prev) => ({ ...prev, [d.cp]: "new" }))}
+                style={{
+                  padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer",
+                  background: dupeSelections[d.cp] === "new" ? "#238636" : "#21262d",
+                  color: dupeSelections[d.cp] === "new" ? "#fff" : "#8b949e",
+                  border: `1px solid ${dupeSelections[d.cp] === "new" ? "#238636" : "#30363d"}`,
+                }}
+              >
+                Mover a {conflicts.name}
+              </button>
+              <button
+                onClick={() => setDupeSelections((prev) => ({ ...prev, [d.cp]: d.zoneId }))}
+                style={{
+                  padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer",
+                  background: dupeSelections[d.cp] !== "new" ? "#238636" : "#21262d",
+                  color: dupeSelections[d.cp] !== "new" ? "#fff" : "#8b949e",
+                  border: `1px solid ${dupeSelections[d.cp] !== "new" ? "#238636" : "#30363d"}`,
+                }}
+              >
+                Dejar en {d.zoneName}
+              </button>
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+            <Btn small onClick={resolveConflicts}>Confirmar</Btn>
+            <Btn small variant="ghost" onClick={() => setConflicts(null)}>Cancelar</Btn>
+          </div>
+        </div>
+      )}
+
       {zones.length === 0 && <p style={{ color: "#484f58", fontSize: 13, textAlign: "center", padding: 20 }}>No hay zonas configuradas</p>}
       {zones.map((z) => (
         <div key={z.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#0d1117", borderRadius: 8, marginBottom: 6, border: "1px solid #21262d" }}>
@@ -673,10 +832,10 @@ function ResultsDashboard({ shipments, zones, carriers }) {
 
   // Generate downloadable TXT files
   const generateTXT = (selectedShipments) => {
-    // Each shipment has its raw ZPL label stored in rawLabel
-    // Rebuild file with page breaks between labels
-    const labels = selectedShipments.map((s) => s.rawLabel).filter(Boolean);
-    return labels.join("\n^XA^MCY^XZ\n") + (labels.length ? "\n^XA^MCY^XZ\n" : "");
+    // For each selected shipment, find ALL flex labels with that envio number
+    const envioNums = new Set(selectedShipments.map((s) => s.envio).filter(Boolean));
+    const allLabels = flex.filter((s) => envioNums.has(s.envio)).flatMap((s) => s.rawLabels || []);
+    return allLabels.join("\n^XA^MCY^XZ\n") + (allLabels.length ? "\n^XA^MCY^XZ\n" : "");
   };
 
   const download = (filename, content) => {
