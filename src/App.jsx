@@ -1137,6 +1137,215 @@ function ResultsDashboard({ shipments, zones, carriers, setZones }) {
     }
   };
 
+  // Format date for printable reports
+  const today = new Date().toLocaleDateString("es-AR", { day: "2-digit", month: "long", year: "numeric" });
+
+  // Generate printable summary for a single carrier (opens print dialog)
+  const printCarrierSummary = (carrier, shipments) => {
+    // Group by zone for cleaner presentation
+    const byZone = {};
+    const noZoneList = [];
+    for (const s of shipments) {
+      const zone = zones.find((z) => z.cps.includes(s.cp));
+      if (zone) {
+        if (!byZone[zone.name]) byZone[zone.name] = [];
+        byZone[zone.name].push(s);
+      } else {
+        noZoneList.push(s);
+      }
+    }
+
+    const allSkus = shipments.flatMap((s) => s.items);
+    const skuTotals = {};
+    for (const it of allSkus) skuTotals[it.sku] = (skuTotals[it.sku] || 0) + it.qty;
+
+    const zonesHtml = Object.entries(byZone).map(([zoneName, list]) => `
+      <h3 class="zone-header">${zoneName} <span class="zone-count">(${list.length} envío${list.length !== 1 ? "s" : ""})</span></h3>
+      <table>
+        <thead><tr><th>#</th><th>CP</th><th>Destinatario</th><th>Dirección</th><th>Localidad</th><th>Items</th><th>Tipo</th></tr></thead>
+        <tbody>
+          ${list.map((s, i) => `
+            <tr>
+              <td>${i + 1}</td>
+              <td><strong>${s.cp || "—"}</strong></td>
+              <td>${s.destinatario || "—"}</td>
+              <td>${s.direccion || "—"}</td>
+              <td>${s.localidad || "—"}</td>
+              <td>${s.items.map((it) => `${it.sku} ×${it.qty}`).join(", ")}</td>
+              <td>${s.tipoEnvio || "—"}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `).join("");
+
+    const noZoneHtml = noZoneList.length > 0 ? `
+      <h3 class="zone-header zone-warning">Sin zona asignada <span class="zone-count">(${noZoneList.length})</span></h3>
+      <table>
+        <thead><tr><th>#</th><th>CP</th><th>Destinatario</th><th>Dirección</th><th>Localidad</th><th>Items</th><th>Tipo</th></tr></thead>
+        <tbody>
+          ${noZoneList.map((s, i) => `
+            <tr>
+              <td>${i + 1}</td>
+              <td><strong>${s.cp || "—"}</strong></td>
+              <td>${s.destinatario || "—"}</td>
+              <td>${s.direccion || "—"}</td>
+              <td>${s.localidad || "—"}</td>
+              <td>${s.items.map((it) => `${it.sku} ×${it.qty}`).join(", ")}</td>
+              <td>${s.tipoEnvio || "—"}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    ` : "";
+
+    const html = `<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"><title>Resumen ${carrier.name}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", sans-serif; color: #222; margin: 0; padding: 24px; }
+  h1 { margin: 0 0 4px 0; font-size: 24px; color: #1a1a1a; }
+  .subtitle { color: #666; font-size: 14px; margin-bottom: 20px; }
+  .meta-row { display: flex; gap: 20px; padding: 14px 18px; background: #f5f5f5; border-radius: 8px; margin-bottom: 20px; }
+  .meta-item { flex: 1; }
+  .meta-label { font-size: 11px; color: #888; text-transform: uppercase; margin-bottom: 2px; }
+  .meta-value { font-size: 18px; font-weight: 700; color: #1a1a1a; }
+  .zone-header { font-size: 15px; margin: 22px 0 8px 0; padding-bottom: 6px; border-bottom: 2px solid #1a1a1a; }
+  .zone-warning { border-bottom-color: #c23; color: #c23; }
+  .zone-count { font-weight: normal; color: #888; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 18px; }
+  th { text-align: left; padding: 8px 10px; background: #f0f0f0; border-bottom: 1px solid #ccc; font-weight: 700; }
+  td { padding: 8px 10px; border-bottom: 1px solid #eee; }
+  tr:nth-child(even) td { background: #fafafa; }
+  .sku-summary { margin-top: 24px; padding: 14px 18px; background: #f5f5f5; border-radius: 8px; }
+  .sku-summary h3 { margin: 0 0 10px 0; font-size: 14px; }
+  .sku-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 6px; }
+  .sku-item { padding: 6px 10px; background: white; border-radius: 4px; font-size: 12px; display: flex; justify-content: space-between; }
+  .sku-name { font-family: monospace; }
+  .sku-qty { font-weight: 700; }
+  .footer { margin-top: 30px; padding-top: 12px; border-top: 1px solid #ddd; font-size: 11px; color: #999; text-align: center; }
+  @media print { body { padding: 12px; } .no-print { display: none; } }
+  .no-print { position: fixed; top: 10px; right: 10px; }
+  .no-print button { background: #1a1a1a; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; }
+</style></head>
+<body>
+<div class="no-print"><button onclick="window.print()">🖨️ Imprimir / Guardar PDF</button></div>
+<h1>${carrier.name}</h1>
+<div class="subtitle">Hoja de ruta para transportista</div>
+
+<div class="meta-row">
+  <div class="meta-item"><div class="meta-label">Fecha</div><div class="meta-value">${today}</div></div>
+  <div class="meta-item"><div class="meta-label">Total envíos</div><div class="meta-value">${shipments.length}</div></div>
+  <div class="meta-item"><div class="meta-label">Total unidades</div><div class="meta-value">${allSkus.reduce((n, it) => n + it.qty, 0)}</div></div>
+</div>
+
+${zonesHtml}
+${noZoneHtml}
+
+<div class="sku-summary">
+  <h3>Resumen de productos</h3>
+  <div class="sku-grid">
+    ${Object.entries(skuTotals).sort((a, b) => b[1] - a[1]).map(([sku, qty]) => `
+      <div class="sku-item"><span class="sku-name">${sku}</span><span class="sku-qty">×${qty}</span></div>
+    `).join("")}
+  </div>
+</div>
+
+<div class="footer">Generado automáticamente el ${today}</div>
+</body></html>`;
+
+    const win = window.open("", "_blank");
+    if (win) { win.document.write(html); win.document.close(); }
+  };
+
+  // Generate general printable report (all results)
+  const printGeneralReport = () => {
+    const allFlexItems = flex.flatMap((s) => s.items);
+    const allColectaItems = colecta.flatMap((s) => s.items);
+    const skuTotals = {};
+    for (const it of [...allFlexItems, ...allColectaItems]) skuTotals[it.sku] = (skuTotals[it.sku] || 0) + it.qty;
+
+    const zonesHtml = zoneBreakdown.map((zb) => `
+      <tr><td>${zb.zone.name}</td><td style="text-align: right; font-weight: 700;">${zb.count}</td></tr>
+    `).join("");
+
+    const carriersHtml = carrierAssignments.map((ca) => `
+      <tr>
+        <td>${ca.carrier.name}</td>
+        <td style="text-align: right;">${ca.shipments.length}</td>
+        <td style="text-align: right; color: ${ca.overflow.length > 0 ? "#c23" : "#999"};">${ca.overflow.length || "—"}</td>
+      </tr>
+    `).join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"><title>Resumen general</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", sans-serif; color: #222; margin: 0; padding: 24px; }
+  h1 { margin: 0 0 4px 0; font-size: 24px; }
+  .subtitle { color: #666; font-size: 14px; margin-bottom: 20px; }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 24px; }
+  .stat-box { padding: 16px; background: #f5f5f5; border-radius: 8px; text-align: center; }
+  .stat-value { font-size: 28px; font-weight: 800; color: #1a1a1a; }
+  .stat-label { font-size: 12px; color: #666; margin-top: 4px; }
+  h2 { font-size: 16px; margin: 24px 0 10px 0; padding-bottom: 6px; border-bottom: 2px solid #1a1a1a; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 8px 10px; background: #f0f0f0; border-bottom: 1px solid #ccc; }
+  td { padding: 8px 10px; border-bottom: 1px solid #eee; }
+  .sku-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 6px; }
+  .sku-item { padding: 6px 10px; background: #f5f5f5; border-radius: 4px; font-size: 12px; display: flex; justify-content: space-between; }
+  .sku-name { font-family: monospace; }
+  .footer { margin-top: 30px; padding-top: 12px; border-top: 1px solid #ddd; font-size: 11px; color: #999; text-align: center; }
+  @media print { body { padding: 12px; } .no-print { display: none; } }
+  .no-print { position: fixed; top: 10px; right: 10px; }
+  .no-print button { background: #1a1a1a; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; }
+</style></head>
+<body>
+<div class="no-print"><button onclick="window.print()">🖨️ Imprimir / Guardar PDF</button></div>
+<h1>Resumen general de envíos</h1>
+<div class="subtitle">${today}</div>
+
+<div class="stats-grid">
+  <div class="stat-box"><div class="stat-value">${flex.length}</div><div class="stat-label">Envíos FLEX</div></div>
+  <div class="stat-box"><div class="stat-value">${colecta.length}</div><div class="stat-label">Órdenes COLECTA</div></div>
+  <div class="stat-box"><div class="stat-value">${[...allFlexItems, ...allColectaItems].reduce((n, it) => n + it.qty, 0)}</div><div class="stat-label">Unidades totales</div></div>
+</div>
+
+${zones.length > 0 ? `
+<h2>Envíos FLEX por zona</h2>
+<table>
+  <thead><tr><th>Zona</th><th style="text-align: right;">Envíos</th></tr></thead>
+  <tbody>
+    ${zonesHtml}
+    ${noZone.length > 0 ? `<tr><td style="color: #c23;">Sin zona asignada</td><td style="text-align: right; font-weight: 700; color: #c23;">${noZone.length}</td></tr>` : ""}
+  </tbody>
+</table>
+` : ""}
+
+${carriers.length > 0 ? `
+<h2>Asignación por transportista</h2>
+<table>
+  <thead><tr><th>Transportista</th><th style="text-align: right;">Asignados</th><th style="text-align: right;">Overflow</th></tr></thead>
+  <tbody>
+    ${carriersHtml}
+    ${extra.length > 0 ? `<tr><td style="color: #c23;">EXTRA (sin transportista)</td><td style="text-align: right; font-weight: 700; color: #c23;">${extra.length}</td><td></td></tr>` : ""}
+  </tbody>
+</table>
+` : ""}
+
+<h2>SKUs totales</h2>
+<div class="sku-grid">
+  ${Object.entries(skuTotals).sort((a, b) => b[1] - a[1]).map(([sku, qty]) => `
+    <div class="sku-item"><span class="sku-name">${sku}</span><span style="font-weight: 700;">×${qty}</span></div>
+  `).join("")}
+</div>
+
+<div class="footer">Generado automáticamente el ${today}</div>
+</body></html>`;
+
+    const win = window.open("", "_blank");
+    if (win) { win.document.write(html); win.document.close(); }
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Summary row */}
@@ -1217,9 +1426,14 @@ function ResultsDashboard({ shipments, zones, carriers, setZones }) {
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <Badge color="green">{ca.shipments.length} envío{ca.shipments.length !== 1 ? "s" : ""}</Badge>
                     {ca.shipments.length > 0 && (
-                      <Btn small variant="secondary" onClick={() => download(`${ca.carrier.name.replace(/\s+/g, "_")}.txt`, generateTXT(ca.shipments))}>
-                        ⬇ TXT
-                      </Btn>
+                      <>
+                        <Btn small variant="secondary" onClick={() => printCarrierSummary(ca.carrier, ca.shipments)}>
+                          🖨️ Hoja
+                        </Btn>
+                        <Btn small variant="secondary" onClick={() => download(`${ca.carrier.name.replace(/\s+/g, "_")}.txt`, generateTXT(ca.shipments))}>
+                          ⬇ TXT
+                        </Btn>
+                      </>
                     )}
                   </div>
                 </div>
@@ -1252,9 +1466,14 @@ function ResultsDashboard({ shipments, zones, carriers, setZones }) {
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <Badge color="red">{extra.length} envío{extra.length !== 1 ? "s" : ""}</Badge>
                   {extra.length > 0 && (
-                    <Btn small variant="secondary" onClick={() => download("EXTRA_sin_transportista.txt", generateTXT(extra))}>
-                      ⬇ TXT
-                    </Btn>
+                    <>
+                      <Btn small variant="secondary" onClick={() => printCarrierSummary({ name: "EXTRA (sin transportista)" }, extra)}>
+                        🖨️ Hoja
+                      </Btn>
+                      <Btn small variant="secondary" onClick={() => download("EXTRA_sin_transportista.txt", generateTXT(extra))}>
+                        ⬇ TXT
+                      </Btn>
+                    </>
                   )}
                 </div>
               </div>
@@ -1278,11 +1497,18 @@ function ResultsDashboard({ shipments, zones, carriers, setZones }) {
         )}
       </Card>
 
-      {/* Generate all button */}
-      {carriers.length > 0 && flex.length > 0 && (
-        <Btn onClick={handleGenerateAll} style={{ width: "100%", padding: "14px 20px", fontSize: 15, justifyContent: "center", borderRadius: 10 }}>
-          ⬇ Generar todos los TXT
-        </Btn>
+      {/* Generate all + Report buttons */}
+      {(carriers.length > 0 || zones.length > 0) && (flex.length > 0 || colecta.length > 0) && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {carriers.length > 0 && flex.length > 0 && (
+            <Btn onClick={handleGenerateAll} style={{ flex: "1 1 200px", padding: "14px 20px", fontSize: 15, justifyContent: "center", borderRadius: 10 }}>
+              ⬇ Generar todos los TXT
+            </Btn>
+          )}
+          <Btn onClick={printGeneralReport} variant="secondary" style={{ flex: "1 1 200px", padding: "14px 20px", fontSize: 15, justifyContent: "center", borderRadius: 10 }}>
+            🖨️ Reporte general (PDF)
+          </Btn>
+        </div>
       )}
 
       {/* Detail table */}
