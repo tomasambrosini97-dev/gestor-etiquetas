@@ -17,6 +17,50 @@ async function saveCarriers(carriers) {
   try { await fetch("/api/carriers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(carriers) }); } catch (e) { console.error(e); }
 }
 
+// ─── Client list helpers ───
+async function loadClients() {
+  try {
+    const res = await fetch("/api/clients");
+    return await res.json();
+  } catch { return []; }
+}
+async function saveClients(clients) {
+  try { await fetch("/api/clients", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(clients) }); } catch (e) { console.error(e); }
+}
+
+// ─── History helpers ───
+async function loadHistoryDates() {
+  try {
+    const res = await fetch("/api/history/dates");
+    return await res.json();
+  } catch { return []; }
+}
+async function loadHistoryDay(date) {
+  try {
+    const res = await fetch(`/api/history/${date}`);
+    return await res.json();
+  } catch { return []; }
+}
+async function saveHistoryEntry(date, entry) {
+  try {
+    await fetch("/api/history", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date, entry }),
+    });
+  } catch (e) { console.error(e); }
+}
+async function deleteHistoryEntry(date, entryId) {
+  try {
+    await fetch(`/api/history/${date}/${entryId}`, { method: "DELETE" });
+  } catch (e) { console.error(e); }
+}
+
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function parseZPL(text) {
   const shipments = [];
   // Extract every individual ^XA...^XZ label
@@ -696,11 +740,13 @@ function CarriersPanel({ carriers, setCarriers, zones }) {
 }
 
 // ─── File Upload ───
-function FileUpload({ onParsed }) {
+function FileUpload({ onParsed, clients, setClients }) {
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState([]);
+  const [clientName, setClientName] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const fileRef = useRef();
 
   const addFiles = (newFiles) => {
@@ -748,12 +794,28 @@ function FileUpload({ onParsed }) {
         setLoading(false);
         return;
       }
-      onParsed(allShipments);
+
+      // Save new client name if provided and not in list
+      const cleanName = clientName.trim();
+      if (cleanName && !clients.includes(cleanName)) {
+        const newClients = [...clients, cleanName].sort((a, b) => a.localeCompare(b));
+        setClients(newClients);
+        saveClients(newClients);
+      }
+
+      onParsed(allShipments, cleanName || "Sin asignar");
+      setFiles([]);
+      setClientName("");
     } catch (e) {
       setError("Error al procesar: " + e.message);
     }
     setLoading(false);
   };
+
+  // Filter client suggestions based on input
+  const filteredClients = clientName.trim()
+    ? clients.filter((c) => c.toLowerCase().includes(clientName.toLowerCase()) && c.toLowerCase() !== clientName.toLowerCase())
+    : clients;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -809,6 +871,65 @@ function FileUpload({ onParsed }) {
               <Btn variant="ghost" small onClick={() => removeFile(f.name)}>✕</Btn>
             </div>
           ))}
+
+          {/* Client selector */}
+          <div style={{ padding: "10px 12px", background: "#0d1117", borderRadius: 8, border: "1px solid #21262d", marginTop: 4 }}>
+            <label style={{ display: "block", color: "#8b949e", fontSize: 11, fontWeight: 600, marginBottom: 6 }}>
+              CLIENTE (opcional)
+            </label>
+            <div style={{ position: "relative" }}>
+              <input
+                type="text"
+                value={clientName}
+                onChange={(e) => setClientName(e.target.value)}
+                onFocus={() => setShowSuggestions(true)}
+                placeholder="Nombre del cliente, ej: Drink Suma, Yopi..."
+                style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: 8, padding: "8px 12px", color: "#e6edf3", fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box" }}
+              />
+              {showSuggestions && filteredClients.length > 0 && (
+                <>
+                  <div onClick={() => setShowSuggestions(false)} style={{ position: "fixed", inset: 0, zIndex: 10 }} />
+                  <div style={{
+                    position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 11,
+                    background: "#161b22", border: "1px solid #30363d", borderRadius: 6,
+                    maxHeight: 180, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+                  }}>
+                    {filteredClients.map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => { setClientName(c); setShowSuggestions(false); }}
+                        style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 12px", background: "none", border: "none", color: "#c9d1d9", fontSize: 13, cursor: "pointer", borderBottom: "1px solid #21262d" }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = "#21262d"}
+                        onMouseLeave={(e) => e.currentTarget.style.background = "none"}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+            {clients.length > 0 && (
+              <div style={{ marginTop: 6, display: "flex", gap: 4, flexWrap: "wrap" }}>
+                <span style={{ color: "#484f58", fontSize: 11 }}>Recientes:</span>
+                {clients.slice(0, 8).map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setClientName(c)}
+                    style={{ background: clientName === c ? "#1a3328" : "#161b22", border: `1px solid ${clientName === c ? "#2a5a40" : "#21262d"}`, color: clientName === c ? "#4ade80" : "#8b949e", borderRadius: 12, padding: "2px 8px", fontSize: 11, cursor: "pointer" }}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            )}
+            {!clientName.trim() && (
+              <p style={{ color: "#fb923c", fontSize: 11, margin: "6px 0 0 0" }}>
+                ⚠ Sin cliente → se guardará como "Sin asignar"
+              </p>
+            )}
+          </div>
+
           <Btn
             onClick={processAll}
             disabled={loading}
@@ -959,15 +1080,20 @@ function UnassignedCPs({ noZoneShipments, zones, setZones }) {
 }
 
 // ─── Results Dashboard ───
-function ResultsDashboard({ shipments, zones, carriers, setZones }) {
+function ResultsDashboard({ shipments, zones, carriers, setZones, currentClient }) {
   const flex = shipments.filter((s) => s.type === "FLEX");
   const colecta = shipments.filter((s) => s.type === "COLECTA");
 
   // Manual overrides: envio -> carrierId | "EXTRA"
   const [manualOverrides, setManualOverrides] = useState({});
+  const [savedToHistory, setSavedToHistory] = useState(false);
+  const [savingHistory, setSavingHistory] = useState(false);
 
-  // Reset overrides when shipments change (new file loaded)
-  useEffect(() => { setManualOverrides({}); }, [shipments]);
+  // Reset overrides and saved state when shipments change (new file loaded)
+  useEffect(() => {
+    setManualOverrides({});
+    setSavedToHistory(false);
+  }, [shipments]);
 
   const moveEnvio = (envio, target) => {
     setManualOverrides((prev) => ({ ...prev, [envio]: target }));
@@ -1346,8 +1472,75 @@ ${carriers.length > 0 ? `
     if (win) { win.document.write(html); win.document.close(); }
   };
 
+  // Save current state to history
+  const saveToHistory = async () => {
+    setSavingHistory(true);
+    try {
+      const serializeShipment = (s) => ({
+        type: s.type, cp: s.cp, envio: s.envio, destinatario: s.destinatario,
+        localidad: s.localidad, tipoEnvio: s.tipoEnvio, direccion: s.direccion,
+        barrio: s.barrio, referencia: s.referencia, fecha: s.fecha, items: s.items,
+      });
+
+      const entry = {
+        id: Math.random().toString(36).slice(2) + Date.now().toString(36),
+        timestamp: Date.now(),
+        client: currentClient || "Sin asignar",
+        zonesSnapshot: zones.map((z) => ({ id: z.id, name: z.name, cps: [...z.cps] })),
+        carrierAssignments: carrierAssignments.map((ca) => ({
+          carrierName: ca.carrier.name,
+          shipments: ca.shipments.map(serializeShipment),
+        })),
+        extra: extra.map(serializeShipment),
+        colecta: colecta.map(serializeShipment),
+        totals: {
+          flex: flex.length,
+          colecta: colecta.length,
+          units: allItems.reduce((n, i) => n + i.qty, 0),
+        },
+      };
+
+      await saveHistoryEntry(todayISO(), entry);
+      setSavedToHistory(true);
+    } catch (e) {
+      console.error("Error guardando historial:", e);
+    }
+    setSavingHistory(false);
+  };
+
+  // Auto-save on mount
+  useEffect(() => {
+    if (shipments && shipments.length > 0 && !savedToHistory && !savingHistory) {
+      saveToHistory();
+    }
+    // eslint-disable-next-line
+  }, [shipments]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Client banner */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "#1a2942", border: "1px solid #2a4a6b", borderRadius: 10, flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 18 }}>🏢</span>
+          <div>
+            <div style={{ color: "#8b949e", fontSize: 11, fontWeight: 600 }}>CLIENTE</div>
+            <div style={{ color: "#60a5fa", fontSize: 15, fontWeight: 700 }}>{currentClient || "Sin asignar"}</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {savingHistory ? (
+            <Badge color="gray">Guardando...</Badge>
+          ) : savedToHistory ? (
+            <>
+              <Badge color="green">✓ Guardado en historial</Badge>
+              <Btn small variant="ghost" onClick={saveToHistory}>Actualizar</Btn>
+            </>
+          ) : (
+            <Btn small variant="secondary" onClick={saveToHistory}>💾 Guardar en historial</Btn>
+          )}
+        </div>
+      </div>
+
       {/* Summary row */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
         <Card accent="#60a5fa">
@@ -1771,12 +1964,311 @@ function DetailTable({ flex, carrierAssignments, carriers }) {
   );
 }
 
+// ─── History Panel ───
+function HistoryPanel() {
+  const [dates, setDates] = useState([]);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const d = await loadHistoryDates();
+      setDates(d);
+      if (d.length > 0) setSelectedDate(d[0]);
+      setLoading(false);
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedDate) { setEntries([]); return; }
+    (async () => {
+      const e = await loadHistoryDay(selectedDate);
+      setEntries(e);
+    })();
+  }, [selectedDate]);
+
+  const handleDelete = async (entryId) => {
+    if (!confirm("¿Borrar esta entrada del historial?")) return;
+    await deleteHistoryEntry(selectedDate, entryId);
+    const e = await loadHistoryDay(selectedDate);
+    setEntries(e);
+    // If no entries left, refresh dates
+    if (e.length === 0) {
+      const d = await loadHistoryDates();
+      setDates(d);
+      setSelectedDate(d.length > 0 ? d[0] : null);
+    }
+  };
+
+  // Group entries by client
+  const byClient = {};
+  for (const entry of entries) {
+    const c = entry.client || "Sin asignar";
+    if (!byClient[c]) byClient[c] = [];
+    byClient[c].push(entry);
+  }
+
+  // Format date for display
+  const formatDate = (iso) => {
+    const [y, m, d] = iso.split("-");
+    const date = new Date(+y, +m - 1, +d);
+    return date.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  };
+
+  // Print full day report grouped by client
+  const printDaySummary = () => {
+    if (!selectedDate || entries.length === 0) return;
+
+    const clientsHtml = Object.entries(byClient).map(([client, list]) => {
+      // Aggregate all data for this client across entries
+      const allCarrierAssignments = {};
+      let allExtra = [];
+      let allColecta = [];
+      const allItems = [];
+      let totalFlex = 0, totalColecta = 0, totalUnits = 0;
+
+      for (const entry of list) {
+        totalFlex += entry.totals?.flex || 0;
+        totalColecta += entry.totals?.colecta || 0;
+        totalUnits += entry.totals?.units || 0;
+
+        for (const ca of (entry.carrierAssignments || [])) {
+          if (!allCarrierAssignments[ca.carrierName]) allCarrierAssignments[ca.carrierName] = [];
+          allCarrierAssignments[ca.carrierName].push(...ca.shipments);
+          for (const s of ca.shipments) allItems.push(...(s.items || []));
+        }
+        allExtra = allExtra.concat(entry.extra || []);
+        allColecta = allColecta.concat(entry.colecta || []);
+        for (const s of (entry.extra || [])) allItems.push(...(s.items || []));
+        for (const s of (entry.colecta || [])) allItems.push(...(s.items || []));
+      }
+
+      const skuTotals = {};
+      for (const it of allItems) skuTotals[it.sku] = (skuTotals[it.sku] || 0) + it.qty;
+
+      const carriersHtml = Object.entries(allCarrierAssignments).map(([cname, ships]) => `
+        <h4 class="carrier-header">🚛 ${cname} <span class="count">(${ships.length} envío${ships.length !== 1 ? "s" : ""})</span></h4>
+        <table>
+          <thead><tr><th>#</th><th>CP</th><th>Destinatario</th><th>Dirección</th><th>Localidad</th><th>Items</th></tr></thead>
+          <tbody>
+            ${ships.map((s, i) => `
+              <tr>
+                <td>${i + 1}</td>
+                <td><strong>${s.cp || "—"}</strong></td>
+                <td>${s.destinatario || "—"}</td>
+                <td>${s.direccion || "—"}</td>
+                <td>${s.localidad || "—"}</td>
+                <td>${(s.items || []).map((it) => `${it.sku} ×${it.qty}`).join(", ")}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `).join("");
+
+      const extraHtml = allExtra.length > 0 ? `
+        <h4 class="carrier-header warning">⚠ EXTRA (sin transportista) <span class="count">(${allExtra.length})</span></h4>
+        <table>
+          <thead><tr><th>#</th><th>CP</th><th>Destinatario</th><th>Dirección</th><th>Items</th></tr></thead>
+          <tbody>
+            ${allExtra.map((s, i) => `
+              <tr>
+                <td>${i + 1}</td>
+                <td><strong>${s.cp || "—"}</strong></td>
+                <td>${s.destinatario || "—"}</td>
+                <td>${s.direccion || "—"}</td>
+                <td>${(s.items || []).map((it) => `${it.sku} ×${it.qty}`).join(", ")}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      ` : "";
+
+      const colectaHtml = allColecta.length > 0 ? `
+        <h4 class="carrier-header">📋 COLECTA <span class="count">(${allColecta.length})</span></h4>
+        <table>
+          <thead><tr><th>#</th><th>CP</th><th>Items</th></tr></thead>
+          <tbody>
+            ${allColecta.map((s, i) => `
+              <tr>
+                <td>${i + 1}</td>
+                <td>${s.cp || "—"}</td>
+                <td>${(s.items || []).map((it) => `${it.sku} ×${it.qty}`).join(", ")}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      ` : "";
+
+      return `
+        <div class="client-section">
+          <h2 class="client-header">🏢 ${client}</h2>
+          <div class="client-meta">
+            <span><strong>${list.length}</strong> carga${list.length !== 1 ? "s" : ""}</span>
+            <span><strong>${totalFlex}</strong> FLEX</span>
+            <span><strong>${totalColecta}</strong> COLECTA</span>
+            <span><strong>${totalUnits}</strong> unidades</span>
+          </div>
+          ${carriersHtml}
+          ${extraHtml}
+          ${colectaHtml}
+          <div class="sku-summary">
+            <strong>Productos del cliente:</strong>
+            <div class="sku-grid">
+              ${Object.entries(skuTotals).sort((a, b) => b[1] - a[1]).map(([sku, qty]) => `
+                <span class="sku-item"><code>${sku}</code> <strong>×${qty}</strong></span>
+              `).join("")}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"><title>Resumen diario - ${formatDate(selectedDate)}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", sans-serif; color: #222; margin: 0; padding: 24px; }
+  h1 { margin: 0 0 4px 0; font-size: 26px; }
+  .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; text-transform: capitalize; }
+  .client-section { margin-bottom: 40px; padding: 20px; background: #fafafa; border-radius: 10px; border: 1px solid #e0e0e0; page-break-inside: avoid; }
+  .client-header { font-size: 20px; margin: 0 0 10px 0; padding-bottom: 8px; border-bottom: 3px solid #1a1a1a; }
+  .client-meta { display: flex; gap: 20px; padding: 10px 14px; background: white; border-radius: 6px; margin-bottom: 16px; font-size: 13px; }
+  .carrier-header { font-size: 14px; margin: 16px 0 8px 0; padding: 6px 10px; background: #1a1a1a; color: white; border-radius: 4px; }
+  .carrier-header.warning { background: #c23; }
+  .count { font-weight: normal; opacity: 0.8; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 12px; background: white; }
+  th { text-align: left; padding: 6px 8px; background: #f0f0f0; border-bottom: 1px solid #ccc; font-weight: 700; }
+  td { padding: 6px 8px; border-bottom: 1px solid #eee; }
+  .sku-summary { margin-top: 16px; padding: 12px 14px; background: white; border-radius: 6px; font-size: 13px; }
+  .sku-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .sku-item { padding: 3px 8px; background: #f0f0f0; border-radius: 3px; font-size: 11px; }
+  .sku-item code { font-family: monospace; }
+  .footer { margin-top: 30px; padding-top: 12px; border-top: 1px solid #ddd; font-size: 11px; color: #999; text-align: center; }
+  @media print { body { padding: 12px; } .no-print { display: none; } .client-section { background: white; } }
+  .no-print { position: fixed; top: 10px; right: 10px; }
+  .no-print button { background: #1a1a1a; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; }
+</style></head>
+<body>
+<div class="no-print"><button onclick="window.print()">🖨️ Imprimir / Guardar PDF</button></div>
+<h1>Resumen del día</h1>
+<div class="subtitle">${formatDate(selectedDate)}</div>
+${clientsHtml}
+<div class="footer">Generado el ${new Date().toLocaleString("es-AR")}</div>
+</body></html>`;
+
+    const win = window.open("", "_blank");
+    if (win) { win.document.write(html); win.document.close(); }
+  };
+
+  if (loading) {
+    return <Card><p style={{ textAlign: "center", color: "#484f58", padding: 40 }}>Cargando historial...</p></Card>;
+  }
+
+  if (dates.length === 0) {
+    return (
+      <Card>
+        <p style={{ textAlign: "center", color: "#484f58", padding: 40 }}>
+          📚 Aún no hay entradas en el historial.<br/>
+          <span style={{ fontSize: 12 }}>Cuando proceses archivos, las cargas se van a guardar automáticamente acá.</span>
+        </p>
+      </Card>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Date selector */}
+      <Card title="Seleccioná un día" icon="📅" accent="#60a5fa">
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {dates.map((d) => (
+            <button
+              key={d}
+              onClick={() => setSelectedDate(d)}
+              style={{
+                padding: "8px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                background: selectedDate === d ? "#1a2942" : "#0d1117",
+                color: selectedDate === d ? "#60a5fa" : "#8b949e",
+                border: `1px solid ${selectedDate === d ? "#2a4a6b" : "#21262d"}`,
+              }}
+            >
+              {formatDate(d)}
+            </button>
+          ))}
+        </div>
+      </Card>
+
+      {/* Day summary */}
+      {selectedDate && (
+        <>
+          <Card title={`Resumen del ${formatDate(selectedDate)}`} icon="📊" accent="#4ade80">
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 14 }}>
+              <div style={{ padding: 12, background: "#0d1117", borderRadius: 8, border: "1px solid #21262d", textAlign: "center" }}>
+                <div style={{ fontSize: 24, fontWeight: 800, color: "#60a5fa" }}>{entries.length}</div>
+                <div style={{ fontSize: 11, color: "#8b949e" }}>Cargas</div>
+              </div>
+              <div style={{ padding: 12, background: "#0d1117", borderRadius: 8, border: "1px solid #21262d", textAlign: "center" }}>
+                <div style={{ fontSize: 24, fontWeight: 800, color: "#4ade80" }}>{Object.keys(byClient).length}</div>
+                <div style={{ fontSize: 11, color: "#8b949e" }}>Clientes</div>
+              </div>
+              <div style={{ padding: 12, background: "#0d1117", borderRadius: 8, border: "1px solid #21262d", textAlign: "center" }}>
+                <div style={{ fontSize: 24, fontWeight: 800, color: "#fb923c" }}>{entries.reduce((n, e) => n + (e.totals?.flex || 0), 0)}</div>
+                <div style={{ fontSize: 11, color: "#8b949e" }}>FLEX</div>
+              </div>
+              <div style={{ padding: 12, background: "#0d1117", borderRadius: 8, border: "1px solid #21262d", textAlign: "center" }}>
+                <div style={{ fontSize: 24, fontWeight: 800, color: "#c084fc" }}>{entries.reduce((n, e) => n + (e.totals?.units || 0), 0)}</div>
+                <div style={{ fontSize: 11, color: "#8b949e" }}>Unidades</div>
+              </div>
+            </div>
+            <Btn onClick={printDaySummary} style={{ width: "100%", padding: "12px 20px", fontSize: 14, justifyContent: "center", borderRadius: 10 }}>
+              🖨️ Imprimir resumen del día (por cliente)
+            </Btn>
+          </Card>
+
+          {/* Entries by client */}
+          {Object.entries(byClient).map(([client, list]) => (
+            <Card key={client} title={`🏢 ${client}`} accent="#60a5fa">
+              <div style={{ fontSize: 12, color: "#8b949e", marginBottom: 10 }}>
+                {list.length} carga{list.length !== 1 ? "s" : ""} · {list.reduce((n, e) => n + (e.totals?.flex || 0), 0)} FLEX · {list.reduce((n, e) => n + (e.totals?.colecta || 0), 0)} COLECTA · {list.reduce((n, e) => n + (e.totals?.units || 0), 0)} unidades
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {list.map((entry) => {
+                  const time = new Date(entry.timestamp).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+                  return (
+                    <div key={entry.id} style={{ padding: "8px 12px", background: "#0d1117", borderRadius: 6, border: "1px solid #21262d", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <span style={{ color: "#8b949e", fontSize: 12, fontFamily: "monospace" }}>{time}</span>
+                        <Badge color="blue">{entry.totals?.flex || 0} FLEX</Badge>
+                        {entry.totals?.colecta > 0 && <Badge color="orange">{entry.totals.colecta} COLECTA</Badge>}
+                        <Badge color="purple">{entry.totals?.units || 0} u.</Badge>
+                        {entry.carrierAssignments && entry.carrierAssignments.length > 0 && (
+                          <span style={{ color: "#484f58", fontSize: 11 }}>
+                            → {entry.carrierAssignments.filter((ca) => ca.shipments.length > 0).map((ca) => `${ca.carrierName} (${ca.shipments.length})`).join(", ")}
+                            {entry.extra && entry.extra.length > 0 ? `, EXTRA (${entry.extra.length})` : ""}
+                          </span>
+                        )}
+                      </div>
+                      <Btn small variant="ghost" onClick={() => handleDelete(entry.id)}>✕</Btn>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Main App ───
 export default function App() {
   const [tab, setTab] = useState("upload");
   const [zones, setZones] = useState([]);
   const [carriers, setCarriers] = useState([]);
   const [shipments, setShipments] = useState(null);
+  const [currentClient, setCurrentClient] = useState(null);
+  const [clients, setClients] = useState([]);
   const [loaded, setLoaded] = useState(false);
 
   // Load from server
@@ -1785,6 +2277,8 @@ export default function App() {
       const config = await loadConfig();
       setZones(config.zones || []);
       setCarriers(config.carriers || []);
+      const clientList = await loadClients();
+      setClients(clientList || []);
       setLoaded(true);
     })();
   }, []);
@@ -1793,8 +2287,9 @@ export default function App() {
   useEffect(() => { if (loaded) saveZones(zones); }, [zones, loaded]);
   useEffect(() => { if (loaded) saveCarriers(carriers); }, [carriers, loaded]);
 
-  const handleParsed = (s) => {
+  const handleParsed = (s, clientName) => {
     setShipments(s);
+    setCurrentClient(clientName || "Sin asignar");
     setTab("results");
   };
 
@@ -1802,6 +2297,7 @@ export default function App() {
     { id: "upload", label: "Cargar archivo", icon: "📄" },
     { id: "config", label: "Configuración", icon: "⚙️" },
     { id: "results", label: "Resultados", icon: "📊" },
+    { id: "history", label: "Historial", icon: "📚" },
   ];
 
   return (
@@ -1819,11 +2315,11 @@ export default function App() {
 
         {tab === "upload" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <FileUpload onParsed={handleParsed} />
+            <FileUpload onParsed={handleParsed} clients={clients} setClients={setClients} />
             {shipments && (
               <div style={{ textAlign: "center", padding: 16, background: "#1a3328", borderRadius: 10, border: "1px solid #2a5a40" }}>
                 <span style={{ color: "#4ade80", fontWeight: 600 }}>
-                  ✓ Archivo cargado: {shipments.filter((s) => s.type === "FLEX").length} FLEX + {shipments.filter((s) => s.type === "COLECTA").length} COLECTA
+                  ✓ Archivo cargado ({currentClient}): {shipments.filter((s) => s.type === "FLEX").length} FLEX + {shipments.filter((s) => s.type === "COLECTA").length} COLECTA
                 </span>
                 <span style={{ color: "#8b949e", fontSize: 13 }}> — Ir a Resultados para ver el detalle</span>
               </div>
@@ -1840,7 +2336,7 @@ export default function App() {
 
         {tab === "results" && (
           shipments ? (
-            <ResultsDashboard shipments={shipments} zones={zones} carriers={carriers} setZones={setZones} />
+            <ResultsDashboard shipments={shipments} zones={zones} carriers={carriers} setZones={setZones} currentClient={currentClient} />
           ) : (
             <Card>
               <p style={{ textAlign: "center", color: "#484f58", padding: 40 }}>
@@ -1848,6 +2344,10 @@ export default function App() {
               </p>
             </Card>
           )
+        )}
+
+        {tab === "history" && (
+          <HistoryPanel />
         )}
       </div>
     </div>
