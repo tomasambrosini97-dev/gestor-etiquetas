@@ -816,6 +816,77 @@ function FileUpload({ onParsed }) {
   );
 }
 
+// ─── Envio Chip (movable) ───
+function EnvioChip({ shipment, currentLocation, carriers, isOverride, onMove, onClearOverride }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const label = `CP ${shipment.cp} → ${shipment.destinatario || shipment.envio || "Colecta"}`;
+  const otherCarriers = carriers.filter((c) => c.id !== currentLocation);
+
+  return (
+    <div style={{
+      fontSize: 11, color: "#8b949e", background: isOverride ? "#2a1a42" : "#161b22",
+      padding: "4px 8px", borderRadius: 4, border: `1px solid ${isOverride ? "#3a2a5a" : "#21262d"}`,
+      display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+        {isOverride && <span style={{ color: "#c084fc", fontSize: 10 }} title="Movido manualmente">✎</span>}
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+      </div>
+      {shipment.envio && (
+        <div style={{ display: "flex", gap: 4, alignItems: "center", position: "relative" }}>
+          {isOverride && (
+            <button
+              onClick={onClearOverride}
+              style={{ background: "none", border: "1px solid #3a2a5a", borderRadius: 3, padding: "1px 6px", fontSize: 10, color: "#c084fc", cursor: "pointer" }}
+              title="Deshacer movimiento manual"
+            >
+              ↺
+            </button>
+          )}
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            style={{ background: "none", border: "1px solid #30363d", borderRadius: 3, padding: "1px 6px", fontSize: 10, color: "#8b949e", cursor: "pointer" }}
+          >
+            Mover ▾
+          </button>
+          {menuOpen && (
+            <>
+              <div onClick={() => setMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 10 }} />
+              <div style={{
+                position: "absolute", top: "100%", right: 0, marginTop: 4, zIndex: 11,
+                background: "#161b22", border: "1px solid #30363d", borderRadius: 6, padding: 4,
+                minWidth: 140, boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+              }}>
+                {otherCarriers.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => { onMove(c.id); setMenuOpen(false); }}
+                    style={{ display: "block", width: "100%", textAlign: "left", padding: "5px 8px", background: "none", border: "none", color: "#c9d1d9", fontSize: 11, cursor: "pointer", borderRadius: 3 }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = "#21262d"}
+                    onMouseLeave={(e) => e.currentTarget.style.background = "none"}
+                  >
+                    → {c.name}
+                  </button>
+                ))}
+                {currentLocation !== "EXTRA" && (
+                  <button
+                    onClick={() => { onMove("EXTRA"); setMenuOpen(false); }}
+                    style={{ display: "block", width: "100%", textAlign: "left", padding: "5px 8px", background: "none", border: "none", color: "#f87171", fontSize: 11, cursor: "pointer", borderRadius: 3 }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = "#21262d"}
+                    onMouseLeave={(e) => e.currentTarget.style.background = "none"}
+                  >
+                    → EXTRA
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Unassigned CPs ───
 function UnassignedCPs({ noZoneShipments, zones, setZones }) {
   const [assigningCp, setAssigningCp] = useState(null);
@@ -879,6 +950,23 @@ function UnassignedCPs({ noZoneShipments, zones, setZones }) {
 function ResultsDashboard({ shipments, zones, carriers, setZones }) {
   const flex = shipments.filter((s) => s.type === "FLEX");
   const colecta = shipments.filter((s) => s.type === "COLECTA");
+
+  // Manual overrides: envio -> carrierId | "EXTRA"
+  const [manualOverrides, setManualOverrides] = useState({});
+
+  // Reset overrides when shipments change (new file loaded)
+  useEffect(() => { setManualOverrides({}); }, [shipments]);
+
+  const moveEnvio = (envio, target) => {
+    setManualOverrides((prev) => ({ ...prev, [envio]: target }));
+  };
+  const clearOverride = (envio) => {
+    setManualOverrides((prev) => {
+      const next = { ...prev };
+      delete next[envio];
+      return next;
+    });
+  };
 
   const allItems = shipments.flatMap((s) => s.items);
 
@@ -954,7 +1042,44 @@ function ResultsDashboard({ shipments, zones, carriers, setZones }) {
     taken.forEach((s) => assigned.add(s.envio));
     carrierAssignments.push({ carrier: c, shipments: taken, overflow });
   }
-  const extra = flex.filter((s) => !assigned.has(s.envio));
+  let extra = flex.filter((s) => !assigned.has(s.envio));
+
+  // Apply manual overrides
+  if (Object.keys(manualOverrides).length > 0) {
+    // Build current assignment map: envio -> location
+    const locateEnvio = (envio) => {
+      for (const ca of carrierAssignments) {
+        if (ca.shipments.some((s) => s.envio === envio)) return { type: "carrier", carrierId: ca.carrier.id };
+      }
+      return { type: "extra" };
+    };
+
+    // Collect all flex shipments by envio
+    const envioMap = {};
+    for (const s of flex) {
+      if (s.envio) envioMap[s.envio] = s;
+    }
+
+    for (const [envio, target] of Object.entries(manualOverrides)) {
+      const ship = envioMap[envio];
+      if (!ship) continue;
+
+      // Remove from current location
+      for (const ca of carrierAssignments) {
+        ca.shipments = ca.shipments.filter((s) => s.envio !== envio);
+      }
+      extra = extra.filter((s) => s.envio !== envio);
+
+      // Add to target
+      if (target === "EXTRA") {
+        extra.push(ship);
+      } else {
+        const targetCa = carrierAssignments.find((ca) => String(ca.carrier.id) === String(target));
+        if (targetCa) targetCa.shipments.push(ship);
+        else extra.push(ship);
+      }
+    }
+  }
 
   // Generate downloadable TXT files
   const generateTXT = (selectedShipments) => {
@@ -1043,6 +1168,14 @@ function ResultsDashboard({ shipments, zones, carriers, setZones }) {
 
       {/* Carrier assignment */}
       <Card title="Asignación por transportista" icon="🚛" accent="#4ade80">
+        {Object.keys(manualOverrides).length > 0 && (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "#2a1a42", border: "1px solid #3a2a5a", borderRadius: 6, marginBottom: 10 }}>
+            <span style={{ color: "#c084fc", fontSize: 12 }}>
+              ✎ {Object.keys(manualOverrides).length} envío{Object.keys(manualOverrides).length !== 1 ? "s" : ""} movido{Object.keys(manualOverrides).length !== 1 ? "s" : ""} manualmente
+            </span>
+            <Btn small variant="ghost" onClick={() => setManualOverrides({})}>Deshacer todo</Btn>
+          </div>
+        )}
         {carriers.length === 0 ? (
           <p style={{ color: "#484f58", fontSize: 13 }}>Configurá transportistas para ver la asignación y generar TXTs</p>
         ) : (
@@ -1064,11 +1197,17 @@ function ResultsDashboard({ shipments, zones, carriers, setZones }) {
                   </div>
                 </div>
                 {ca.shipments.length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     {ca.shipments.map((s) => (
-                      <span key={s.envio} style={{ fontSize: 11, color: "#8b949e", background: "#161b22", padding: "2px 8px", borderRadius: 4, border: "1px solid #21262d" }}>
-                        CP {s.cp} → {s.destinatario || s.envio}
-                      </span>
+                      <EnvioChip
+                        key={s.envio}
+                        shipment={s}
+                        currentLocation={ca.carrier.id}
+                        carriers={carriers}
+                        isOverride={!!manualOverrides[s.envio]}
+                        onMove={(target) => moveEnvio(s.envio, target)}
+                        onClearOverride={() => clearOverride(s.envio)}
+                      />
                     ))}
                   </div>
                 )}
@@ -1093,11 +1232,17 @@ function ResultsDashboard({ shipments, zones, carriers, setZones }) {
                 </div>
               </div>
               {extra.length > 0 && (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   {extra.map((s) => (
-                    <span key={s.envio || Math.random()} style={{ fontSize: 11, color: "#8b949e", background: "#161b22", padding: "2px 8px", borderRadius: 4, border: "1px solid #21262d" }}>
-                      CP {s.cp} → {s.destinatario || s.envio || "Colecta"}
-                    </span>
+                    <EnvioChip
+                      key={s.envio || Math.random()}
+                      shipment={s}
+                      currentLocation="EXTRA"
+                      carriers={carriers}
+                      isOverride={s.envio && !!manualOverrides[s.envio]}
+                      onMove={(target) => s.envio && moveEnvio(s.envio, target)}
+                      onClearOverride={() => s.envio && clearOverride(s.envio)}
+                    />
                   ))}
                 </div>
               )}
