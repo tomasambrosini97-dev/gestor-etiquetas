@@ -247,7 +247,7 @@ function Btn({ children, onClick, variant = "primary", disabled, style, small })
 
 function TabBar({ tabs, active, onChange }) {
   return (
-    <div style={{ display: "flex", gap: 0, background: T.surface, borderRadius: 4, border: `1px solid ${T.border}`, marginBottom: 16, overflow: "hidden" }}>
+    <div style={{ display: "flex", gap: 0, background: "#ffffff", borderRadius: 4, border: `1px solid #c9c3b2`, marginBottom: 16, overflow: "hidden" }}>
       {tabs.map((t, i) => (
         <button
           key={t.id}
@@ -255,9 +255,9 @@ function TabBar({ tabs, active, onChange }) {
           style={{
             flex: 1, padding: "10px 14px", border: "none", cursor: "pointer",
             fontSize: 12, fontWeight: 700, transition: "all .12s",
-            background: active === t.id ? T.accent : "transparent",
-            color: active === t.id ? "#fff" : T.inkDim,
-            borderLeft: i === 0 ? "none" : `1px solid ${T.border}`,
+            background: active === t.id ? "#ea580c" : "transparent",
+            color: active === t.id ? "#fff" : "#4a4a4a",
+            borderLeft: i === 0 ? "none" : `1px solid #c9c3b2`,
             textTransform: "uppercase", letterSpacing: "0.04em",
             fontFamily: "inherit",
           }}
@@ -267,6 +267,61 @@ function TabBar({ tabs, active, onChange }) {
           {t.icon} {t.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+// ─── Toast system ───
+// Global helper: call toast("mensaje", "success" | "error" | "info")
+function toast(message, type = "success") {
+  window.dispatchEvent(new CustomEvent("app-toast", { detail: { message, type, id: Date.now() + Math.random() } }));
+}
+
+function ToastContainer() {
+  const [toasts, setToasts] = useState([]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      const t = e.detail;
+      setToasts((prev) => [...prev, t]);
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((x) => x.id !== t.id));
+      }, 3500);
+    };
+    window.addEventListener("app-toast", handler);
+    return () => window.removeEventListener("app-toast", handler);
+  }, []);
+
+  const colors = {
+    success: { bg: "#15803d", border: "#15803d" },
+    error: { bg: "#b91c1c", border: "#b91c1c" },
+    info: { bg: "#1e3a5f", border: "#1e3a5f" },
+  };
+
+  return (
+    <div style={{ position: "fixed", bottom: 20, right: 20, zIndex: 1000, display: "flex", flexDirection: "column", gap: 8 }}>
+      {toasts.map((t) => {
+        const c = colors[t.type] || colors.success;
+        return (
+          <div
+            key={t.id}
+            style={{
+              background: c.bg, color: "#fff", padding: "10px 16px", borderRadius: 3,
+              border: `1px solid ${c.border}`, minWidth: 220, maxWidth: 360,
+              fontSize: 13, fontWeight: 600, boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+              animation: "toastSlideIn .2s ease-out",
+            }}
+          >
+            {t.message}
+          </div>
+        );
+      })}
+      <style>{`
+        @keyframes toastSlideIn {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+      `}</style>
     </div>
   );
 }
@@ -1294,19 +1349,32 @@ function ResultsDashboard({ shipments, zones, carriers, setZones, currentClient 
     const a = document.createElement("a");
     a.href = url; a.download = filename; a.click();
     URL.revokeObjectURL(url);
+    toast(`✓ ${filename} descargado`);
   };
 
   const handleGenerateAll = () => {
+    let count = 0;
     for (const ca of carrierAssignments) {
       if (ca.shipments.length > 0) {
         const txt = generateTXT(ca.shipments);
-        download(`${ca.carrier.name.replace(/\s+/g, "_")}.txt`, txt);
+        const blob = new Blob([txt], { type: "text/plain;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = `${ca.carrier.name.replace(/\s+/g, "_")}.txt`; a.click();
+        URL.revokeObjectURL(url);
+        count++;
       }
     }
     if (extra.length > 0) {
       const txt = generateTXT(extra);
-      download("EXTRA_sin_transportista.txt", txt);
+      const blob = new Blob([txt], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "EXTRA_sin_transportista.txt"; a.click();
+      URL.revokeObjectURL(url);
+      count++;
     }
+    toast(`✓ ${count} archivo${count !== 1 ? "s" : ""} TXT descargado${count !== 1 ? "s" : ""}`);
   };
 
   // Format date for printable reports
@@ -1519,7 +1587,7 @@ ${carriers.length > 0 ? `
   };
 
   // Save current state to history
-  const saveToHistory = async () => {
+  const saveToHistory = async (manual = false) => {
     setSavingHistory(true);
     try {
       const serializeShipment = (s) => ({
@@ -1548,8 +1616,10 @@ ${carriers.length > 0 ? `
 
       await saveHistoryEntry(todayISO(), entry);
       setSavedToHistory(true);
+      if (manual) toast("✓ Guardado en historial");
     } catch (e) {
       console.error("Error guardando historial:", e);
+      toast("Error guardando en historial", "error");
     }
     setSavingHistory(false);
   };
@@ -1579,10 +1649,10 @@ ${carriers.length > 0 ? `
           ) : savedToHistory ? (
             <>
               <Badge color="green">✓ Guardado en historial</Badge>
-              <Btn small variant="ghost" onClick={saveToHistory}>Actualizar</Btn>
+              <Btn small variant="ghost" onClick={() => saveToHistory(true)}>Actualizar</Btn>
             </>
           ) : (
-            <Btn small variant="secondary" onClick={saveToHistory}>💾 Guardar en historial</Btn>
+            <Btn small variant="secondary" onClick={() => saveToHistory(true)}>💾 Guardar en historial</Btn>
           )}
         </div>
       </div>
@@ -1948,10 +2018,10 @@ function DetailTable({ flex, carrierAssignments, carriers }) {
         Mostrando {filtered.length} de {flex.length} envío{flex.length !== 1 ? "s" : ""}
       </div>
 
-      <div style={{ overflowX: "auto" }}>
+      <div style={{ overflowX: "auto", maxHeight: 600, overflowY: "auto", border: "1px solid #c9c3b2", borderRadius: 3 }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid #c9c3b2" }}>
+          <thead style={{ position: "sticky", top: 0, zIndex: 1 }}>
+            <tr>
               {["#Envío", "CP", "Tipo", "Destinatario", "Localidad", "Items", "Transportista"].map((h) => (
                 <th key={h} style={{ textAlign: "left", padding: "10px 10px", color: "#1a1a1a", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", background: "#f0ece2", borderBottom: "2px solid #a8a08a" }}>{h}</th>
               ))}
@@ -2408,6 +2478,7 @@ export default function App() {
           <HistoryPanel />
         )}
       </div>
+      <ToastContainer />
     </div>
   );
 }
