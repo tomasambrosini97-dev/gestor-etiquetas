@@ -19,10 +19,11 @@ async function saveCarriers(carriers) {
 
 function parseZPL(text) {
   const shipments = [];
-  const flexByEnvio = {}; // envio -> shipment
   // Extract every individual ^XA...^XZ label
   const allLabels = text.match(/\^XA[\s\S]*?\^XZ/g);
   if (!allLabels) return shipments;
+
+  const cleanText = (s) => s ? s.replace(/_C3_[A-F0-9]{2}/g, "").replace(/_2E/g, ".").replace(/_2D/g, "-").replace(/_20/g, " ").trim() : s;
 
   for (const lab of allLabels) {
     // Skip page break commands
@@ -38,61 +39,54 @@ function parseZPL(text) {
 
     const isFlex = lab.includes("Flex");
 
+    let cp = null, envioNum = null, destinatario = null, localidad = null, tipoEnvio = null;
+    let direccion = null, barrio = null, referencia = null, fecha = null;
+
     if (isFlex) {
       const cpM = lab.match(/FB890,1,0,C.*?FD(\d{4})/);
       const envM = lab.match(/Envio: (\d+)/);
-      const destM = lab.match(/Destinatario: ([^\^(]+)/);
+      const destM = lab.match(/Destinatario: ([^\^]+)/);
       const locM = lab.match(/FO0,660.*?FD([^\^]+)/);
       const tipoM = lab.match(/FO0,770.*?FD([^\^]+)/);
+      const dirM = lab.match(/Direccion: ([^\^]+)/);
+      const barrioM = lab.match(/Barrio: ([^\^]+)/);
+      const refM = lab.match(/Referencia: ([^\^]+)/);
+      const fechaM = lab.match(/FO400,195\^A0N,48,48\^FB400,1,0,C\^FD([^\^]+)/);
 
-      const envioNum = envM ? envM[1] : null;
-      const cp = cpM ? cpM[1] : null;
-      const destinatario = destM ? destM[1].trim() : null;
-      const localidad = locM ? locM[1].replace(/_C3_[A-F0-9]{2}/g, "").trim() : null;
-      const tipoEnvio = tipoM ? tipoM[1].trim() : null;
-
-      if (envioNum && flexByEnvio[envioNum]) {
-        // Existing envio: merge items and label
-        flexByEnvio[envioNum].items.push({ sku, qty });
-        flexByEnvio[envioNum].rawLabels.push(lab);
-      } else {
-        // New envio (or envio without number - treat as separate)
-        const key = envioNum || `_nolabel_${Math.random()}`;
-        flexByEnvio[key] = {
-          type: "FLEX",
-          cp,
-          envio: envioNum,
-          destinatario,
-          localidad,
-          tipoEnvio,
-          items: [{ sku, qty }],
-          rawLabels: [lab],
-        };
-      }
+      if (cpM) cp = cpM[1];
+      if (envM) envioNum = envM[1];
+      if (destM) destinatario = cleanText(destM[1]);
+      if (locM) localidad = cleanText(locM[1]);
+      if (tipoM) tipoEnvio = tipoM[1].trim();
+      if (dirM) direccion = cleanText(dirM[1]);
+      if (barrioM) barrio = cleanText(barrioM[1]);
+      if (refM) referencia = cleanText(refM[1]);
+      if (fechaM) fecha = fechaM[1].trim();
     } else {
-      // COLECTA: CP from text pattern, deduplicated. Each colecta label = independent
-      let cp = null;
+      // COLECTA: CP from text pattern, deduplicated
       const cpMatches = lab.match(/CP[:\s]+(\d{4})/g);
       if (cpMatches) {
         const cps = cpMatches.map((m) => m.match(/(\d{4})/)[1]);
         cp = [...new Set(cps)][0];
       }
-      shipments.push({
-        type: "COLECTA",
-        cp,
-        envio: null,
-        destinatario: null,
-        localidad: null,
-        tipoEnvio: null,
-        items: [{ sku, qty }],
-        rawLabels: [lab],
-      });
     }
+
+    shipments.push({
+      type: isFlex ? "FLEX" : "COLECTA",
+      cp,
+      envio: envioNum,
+      destinatario,
+      localidad,
+      tipoEnvio,
+      direccion,
+      barrio,
+      referencia,
+      fecha,
+      items: [{ sku, qty }],
+      rawLabels: [lab],
+      uid: Math.random().toString(36).slice(2),
+    });
   }
-
-  // Add grouped flex shipments
-  for (const s of Object.values(flexByEnvio)) shipments.push(s);
-
   return shipments;
 }
 
@@ -1297,11 +1291,134 @@ function ResultsDashboard({ shipments, zones, carriers, setZones }) {
   );
 }
 
+// ─── Label Preview Modal ───
+function LabelPreview({ shipment, carrier, onClose }) {
+  if (!shipment) return null;
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 100,
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "#161b22", border: "1px solid #30363d", borderRadius: 12,
+          padding: 24, maxWidth: 520, width: "100%", maxHeight: "90vh", overflow: "auto",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, paddingBottom: 12, borderBottom: "1px solid #30363d" }}>
+          <div>
+            <h3 style={{ color: "#e6edf3", fontSize: 16, fontWeight: 700, margin: 0 }}>
+              {shipment.type === "FLEX" ? "📦 Envío FLEX" : "📋 Orden COLECTA"}
+            </h3>
+            {shipment.envio && (
+              <p style={{ color: "#8b949e", fontSize: 12, fontFamily: "monospace", margin: "2px 0 0 0" }}>
+                #{shipment.envio}
+              </p>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            style={{ background: "none", border: "1px solid #30363d", borderRadius: 6, padding: "4px 10px", color: "#8b949e", cursor: "pointer", fontSize: 14 }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Fields */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* CP + Tipo + Fecha */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {shipment.cp && (
+              <div style={{ flex: "1 1 auto", padding: "10px 14px", background: "#0d1117", borderRadius: 8, border: "1px solid #21262d", textAlign: "center" }}>
+                <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 2 }}>CÓDIGO POSTAL</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "#60a5fa" }}>{shipment.cp}</div>
+              </div>
+            )}
+            {shipment.tipoEnvio && (
+              <div style={{ flex: "1 1 auto", padding: "10px 14px", background: "#0d1117", borderRadius: 8, border: "1px solid #21262d", textAlign: "center" }}>
+                <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 2 }}>TIPO</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: shipment.tipoEnvio === "COMERCIAL" ? "#4ade80" : "#c9d1d9", paddingTop: 4 }}>
+                  {shipment.tipoEnvio}
+                </div>
+              </div>
+            )}
+            {shipment.fecha && (
+              <div style={{ flex: "1 1 auto", padding: "10px 14px", background: "#0d1117", borderRadius: 8, border: "1px solid #21262d", textAlign: "center" }}>
+                <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 2 }}>FECHA</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#fb923c", paddingTop: 4 }}>{shipment.fecha}</div>
+              </div>
+            )}
+          </div>
+
+          {/* Destinatario */}
+          {shipment.destinatario && (
+            <InfoRow label="Destinatario" value={shipment.destinatario} />
+          )}
+
+          {/* Dirección */}
+          {shipment.direccion && (
+            <InfoRow label="Dirección" value={shipment.direccion} />
+          )}
+
+          {/* Localidad + Barrio */}
+          {(shipment.localidad || shipment.barrio) && (
+            <div style={{ display: "flex", gap: 8 }}>
+              {shipment.localidad && <InfoRow label="Localidad" value={shipment.localidad} style={{ flex: 1 }} />}
+              {shipment.barrio && <InfoRow label="Barrio" value={shipment.barrio} style={{ flex: 1 }} />}
+            </div>
+          )}
+
+          {/* Referencia */}
+          {shipment.referencia && (
+            <InfoRow label="Referencia" value={shipment.referencia} />
+          )}
+
+          {/* Items */}
+          <div style={{ padding: "10px 14px", background: "#0d1117", borderRadius: 8, border: "1px solid #21262d" }}>
+            <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 6 }}>ITEMS</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {shipment.items.map((it, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0" }}>
+                  <span style={{ color: "#e6edf3", fontSize: 13, fontFamily: "monospace" }}>{it.sku}</span>
+                  <Badge color="purple">×{it.qty}</Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Transportista */}
+          <div style={{ padding: "10px 14px", background: "#0d1117", borderRadius: 8, border: "1px solid #21262d", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 11, color: "#8b949e" }}>TRANSPORTISTA</span>
+            {carrier ? <Badge color="green">{carrier.name}</Badge> : <Badge color="red">EXTRA</Badge>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InfoRow({ label, value, style }) {
+  return (
+    <div style={{ padding: "10px 14px", background: "#0d1117", borderRadius: 8, border: "1px solid #21262d", ...style }}>
+      <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 2 }}>{label.toUpperCase()}</div>
+      <div style={{ fontSize: 14, color: "#e6edf3" }}>{value}</div>
+    </div>
+  );
+}
+
 // ─── Detail Table with search/filter ───
 function DetailTable({ flex, carrierAssignments, carriers }) {
   const [search, setSearch] = useState("");
-  const [filterCarrier, setFilterCarrier] = useState("all"); // "all" | carrierId | "extra"
-  const [filterTipo, setFilterTipo] = useState("all"); // "all" | "COMERCIAL" | "RESIDENCIAL"
+  const [filterCarrier, setFilterCarrier] = useState("all");
+  const [filterTipo, setFilterTipo] = useState("all");
+  const [previewShipment, setPreviewShipment] = useState(null);
 
   // Find which carrier a specific label belongs to (by reference, not envio)
   const getCarrier = (shipment) => carrierAssignments.find((ca) => ca.shipments.includes(shipment));
@@ -1379,7 +1496,13 @@ function DetailTable({ flex, carrierAssignments, carriers }) {
             {filtered.map((s) => {
               const assignedCarrier = getCarrier(s);
               return (
-                <tr key={s.uid || s.envio} style={{ borderBottom: "1px solid #21262d" }}>
+                <tr
+                  key={s.uid || s.envio}
+                  onClick={() => setPreviewShipment(s)}
+                  style={{ borderBottom: "1px solid #21262d", cursor: "pointer", transition: "background .15s" }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = "#161b22"}
+                  onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                >
                   <td style={{ padding: "8px 10px", color: "#e6edf3", fontFamily: "monospace" }}>{s.envio}</td>
                   <td style={{ padding: "8px 10px" }}><Badge color="blue">{s.cp}</Badge></td>
                   <td style={{ padding: "8px 10px" }}>
@@ -1410,6 +1533,14 @@ function DetailTable({ flex, carrierAssignments, carriers }) {
           </tbody>
         </table>
       </div>
+      <p style={{ color: "#484f58", fontSize: 11, marginTop: 8, textAlign: "center" }}>
+        💡 Click en cualquier fila para ver los detalles completos
+      </p>
+      <LabelPreview
+        shipment={previewShipment}
+        carrier={previewShipment ? getCarrier(previewShipment)?.carrier : null}
+        onClose={() => setPreviewShipment(null)}
+      />
     </Card>
   );
 }
