@@ -1259,46 +1259,124 @@ function ResultsDashboard({ shipments, zones, carriers, setZones }) {
       )}
 
       {/* Detail table */}
-      <Card title="Detalle de envíos FLEX" icon="📋">
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid #30363d" }}>
-                {["#Envío", "CP", "Tipo", "Destinatario", "Localidad", "Items", "Transportista"].map((h) => (
-                  <th key={h} style={{ textAlign: "left", padding: "8px 10px", color: "#8b949e", fontWeight: 600 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {flex.map((s) => {
-                const assignedCarrier = carrierAssignments.find((ca) => ca.shipments.some((cs) => cs.envio === s.envio));
-                return (
-                  <tr key={s.envio} style={{ borderBottom: "1px solid #21262d" }}>
-                    <td style={{ padding: "8px 10px", color: "#e6edf3", fontFamily: "monospace" }}>{s.envio}</td>
-                    <td style={{ padding: "8px 10px" }}><Badge color="blue">{s.cp}</Badge></td>
-                    <td style={{ padding: "8px 10px" }}>
-                      <Badge color={s.tipoEnvio === "COMERCIAL" ? "green" : "gray"}>{s.tipoEnvio || "—"}</Badge>
-                    </td>
-                    <td style={{ padding: "8px 10px", color: "#c9d1d9", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.destinatario}</td>
-                    <td style={{ padding: "8px 10px", color: "#8b949e" }}>{s.localidad}</td>
-                    <td style={{ padding: "8px 10px" }}>
-                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                        {s.items.map((it, j) => (
-                          <Badge key={j} color="purple">{it.sku} ×{it.qty}</Badge>
-                        ))}
-                      </div>
-                    </td>
-                    <td style={{ padding: "8px 10px" }}>
-                      {assignedCarrier ? <Badge color="green">{assignedCarrier.carrier.name}</Badge> : <Badge color="red">EXTRA</Badge>}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <DetailTable flex={flex} carrierAssignments={carrierAssignments} carriers={carriers} />
     </div>
+  );
+}
+
+// ─── Detail Table with search/filter ───
+function DetailTable({ flex, carrierAssignments, carriers }) {
+  const [search, setSearch] = useState("");
+  const [filterCarrier, setFilterCarrier] = useState("all"); // "all" | carrierId | "extra"
+  const [filterTipo, setFilterTipo] = useState("all"); // "all" | "COMERCIAL" | "RESIDENCIAL"
+
+  const getCarrier = (envio) => carrierAssignments.find((ca) => ca.shipments.some((cs) => cs.envio === envio));
+
+  const filtered = flex.filter((s) => {
+    // Carrier filter
+    if (filterCarrier !== "all") {
+      const ca = getCarrier(s.envio);
+      if (filterCarrier === "extra") {
+        if (ca) return false;
+      } else {
+        if (!ca || String(ca.carrier.id) !== String(filterCarrier)) return false;
+      }
+    }
+    // Tipo filter
+    if (filterTipo !== "all" && s.tipoEnvio !== filterTipo) return false;
+    // Search filter
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      const haystack = [s.envio, s.cp, s.destinatario, s.localidad, ...(s.items || []).map((i) => i.sku)]
+        .filter(Boolean).join(" ").toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
+  });
+
+  return (
+    <Card title="Detalle de envíos FLEX" icon="📋">
+      {/* Filters */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
+        <Input
+          value={search}
+          onChange={setSearch}
+          placeholder="🔍 Buscar por envío, CP, destinatario, SKU..."
+          style={{ flex: "1 1 240px", fontSize: 13 }}
+        />
+        <select
+          value={filterCarrier}
+          onChange={(e) => setFilterCarrier(e.target.value)}
+          style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: 8, padding: "8px 12px", color: "#e6edf3", fontSize: 13, outline: "none", cursor: "pointer" }}
+        >
+          <option value="all">Todos los transportistas</option>
+          {carriers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          <option value="extra">EXTRA</option>
+        </select>
+        <select
+          value={filterTipo}
+          onChange={(e) => setFilterTipo(e.target.value)}
+          style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: 8, padding: "8px 12px", color: "#e6edf3", fontSize: 13, outline: "none", cursor: "pointer" }}
+        >
+          <option value="all">Todos los tipos</option>
+          <option value="COMERCIAL">Comercial</option>
+          <option value="RESIDENCIAL">Residencial</option>
+        </select>
+        {(search || filterCarrier !== "all" || filterTipo !== "all") && (
+          <Btn small variant="ghost" onClick={() => { setSearch(""); setFilterCarrier("all"); setFilterTipo("all"); }}>Limpiar</Btn>
+        )}
+      </div>
+
+      {/* Count */}
+      <div style={{ color: "#8b949e", fontSize: 12, marginBottom: 8 }}>
+        Mostrando {filtered.length} de {flex.length} envío{flex.length !== 1 ? "s" : ""}
+      </div>
+
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <thead>
+            <tr style={{ borderBottom: "1px solid #30363d" }}>
+              {["#Envío", "CP", "Tipo", "Destinatario", "Localidad", "Items", "Transportista"].map((h) => (
+                <th key={h} style={{ textAlign: "left", padding: "8px 10px", color: "#8b949e", fontWeight: 600 }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((s) => {
+              const assignedCarrier = getCarrier(s.envio);
+              return (
+                <tr key={s.envio} style={{ borderBottom: "1px solid #21262d" }}>
+                  <td style={{ padding: "8px 10px", color: "#e6edf3", fontFamily: "monospace" }}>{s.envio}</td>
+                  <td style={{ padding: "8px 10px" }}><Badge color="blue">{s.cp}</Badge></td>
+                  <td style={{ padding: "8px 10px" }}>
+                    <Badge color={s.tipoEnvio === "COMERCIAL" ? "green" : "gray"}>{s.tipoEnvio || "—"}</Badge>
+                  </td>
+                  <td style={{ padding: "8px 10px", color: "#c9d1d9", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.destinatario}</td>
+                  <td style={{ padding: "8px 10px", color: "#8b949e" }}>{s.localidad}</td>
+                  <td style={{ padding: "8px 10px" }}>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                      {s.items.map((it, j) => (
+                        <Badge key={j} color="purple">{it.sku} ×{it.qty}</Badge>
+                      ))}
+                    </div>
+                  </td>
+                  <td style={{ padding: "8px 10px" }}>
+                    {assignedCarrier ? <Badge color="green">{assignedCarrier.carrier.name}</Badge> : <Badge color="red">EXTRA</Badge>}
+                  </td>
+                </tr>
+              );
+            })}
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={7} style={{ padding: 20, textAlign: "center", color: "#484f58", fontSize: 13 }}>
+                  No se encontraron envíos con esos filtros
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   );
 }
 
