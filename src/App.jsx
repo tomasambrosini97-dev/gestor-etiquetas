@@ -816,8 +816,67 @@ function FileUpload({ onParsed }) {
   );
 }
 
+// ─── Unassigned CPs ───
+function UnassignedCPs({ noZoneShipments, zones, setZones }) {
+  const [assigningCp, setAssigningCp] = useState(null);
+
+  // Group shipments by CP
+  const byCP = {};
+  for (const s of noZoneShipments) {
+    if (!byCP[s.cp]) byCP[s.cp] = [];
+    byCP[s.cp].push(s);
+  }
+  const cpList = Object.keys(byCP).sort();
+
+  const assignToZone = (cp, zoneId) => {
+    setZones((prev) => prev.map((z) => z.id === zoneId ? { ...z, cps: [...z.cps, cp] } : z));
+    setAssigningCp(null);
+  };
+
+  return (
+    <div style={{ padding: "10px 14px", background: "#0d1117", borderRadius: 8, border: "1px solid #3b1a1a" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <span style={{ color: "#f87171", fontWeight: 600, fontSize: 14 }}>Sin zona asignada</span>
+        <Badge color="red">{noZoneShipments.length} envío{noZoneShipments.length !== 1 ? "s" : ""}</Badge>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {cpList.map((cp) => (
+          <div key={cp} style={{ padding: "6px 10px", background: "#161b22", borderRadius: 6, border: "1px solid #21262d" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Badge color="red">{cp}</Badge>
+                <span style={{ color: "#8b949e", fontSize: 12 }}>{byCP[cp].length} envío{byCP[cp].length !== 1 ? "s" : ""}</span>
+                {byCP[cp][0].localidad && (
+                  <span style={{ color: "#484f58", fontSize: 11 }}>({byCP[cp][0].localidad})</span>
+                )}
+              </div>
+              {assigningCp === cp ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+                  <span style={{ color: "#8b949e", fontSize: 11 }}>Asignar a:</span>
+                  {zones.map((z) => (
+                    <Btn key={z.id} small variant="secondary" onClick={() => assignToZone(cp, z.id)}>
+                      {z.name}
+                    </Btn>
+                  ))}
+                  <Btn small variant="ghost" onClick={() => setAssigningCp(null)}>✕</Btn>
+                </div>
+              ) : (
+                zones.length > 0 && (
+                  <Btn small variant="secondary" onClick={() => setAssigningCp(cp)}>
+                    + Asignar a zona
+                  </Btn>
+                )
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Results Dashboard ───
-function ResultsDashboard({ shipments, zones, carriers }) {
+function ResultsDashboard({ shipments, zones, carriers, setZones }) {
   const flex = shipments.filter((s) => s.type === "FLEX");
   const colecta = shipments.filter((s) => s.type === "COLECTA");
 
@@ -963,13 +1022,7 @@ function ResultsDashboard({ shipments, zones, carriers }) {
               </div>
             ))}
             {noZone.length > 0 && (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", background: "#0d1117", borderRadius: 8, border: "1px solid #3b1a1a" }}>
-                <span style={{ color: "#f87171", fontWeight: 600, fontSize: 14 }}>Sin zona asignada</span>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ color: "#8b949e", fontSize: 12 }}>CPs: {[...new Set(noZone.map((s) => s.cp))].join(", ")}</span>
-                  <Badge color="red">{noZone.length} envío{noZone.length !== 1 ? "s" : ""}</Badge>
-                </div>
-              </div>
+              <UnassignedCPs noZoneShipments={noZone} zones={zones} setZones={setZones} />
             )}
           </div>
         )}
@@ -1173,7 +1226,7 @@ export default function App() {
 
         {tab === "results" && (
           shipments ? (
-            <ResultsDashboard shipments={shipments} zones={zones} carriers={carriers} />
+            <ResultsDashboard shipments={shipments} zones={zones} carriers={carriers} setZones={setZones} />
           ) : (
             <Card>
               <p style={{ textAlign: "center", color: "#484f58", padding: 40 }}>
