@@ -326,6 +326,64 @@ function ToastContainer() {
   );
 }
 
+// ─── Confirm Modal (global, like toast) ───
+// Usage: confirmDialog({ title, message, confirmText, danger }).then(ok => if(ok) { ... })
+function confirmDialog({ title, message, confirmText = "Confirmar", cancelText = "Cancelar", danger = false }) {
+  return new Promise((resolve) => {
+    const id = Date.now() + Math.random();
+    window.dispatchEvent(new CustomEvent("app-confirm", { detail: { id, title, message, confirmText, cancelText, danger, resolve } }));
+  });
+}
+
+function ConfirmModalContainer() {
+  const [current, setCurrent] = useState(null);
+
+  useEffect(() => {
+    const handler = (e) => setCurrent(e.detail);
+    window.addEventListener("app-confirm", handler);
+    return () => window.removeEventListener("app-confirm", handler);
+  }, []);
+
+  if (!current) return null;
+
+  const close = (result) => {
+    current.resolve(result);
+    setCurrent(null);
+  };
+
+  return (
+    <div
+      onClick={() => close(false)}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 2000,
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "#ffffff", border: "1px solid #c9c3b2", borderRadius: 4,
+          padding: 0, maxWidth: 420, width: "100%",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+        }}
+      >
+        <div style={{ padding: "14px 18px", borderBottom: `1px solid #c9c3b2`, background: current.danger ? "#fbe9e9" : "#f0ece2" }}>
+          <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: current.danger ? "#b91c1c" : "#1a1a1a", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            {current.danger ? "⚠ " : ""}{current.title}
+          </h3>
+        </div>
+        <div style={{ padding: "16px 18px", color: "#1a1a1a", fontSize: 13, lineHeight: 1.5 }}>
+          {current.message}
+        </div>
+        <div style={{ padding: "12px 18px", borderTop: `1px solid #c9c3b2`, background: "#faf8f3", display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <Btn small variant="secondary" onClick={() => close(false)}>{current.cancelText}</Btn>
+          <Btn small variant={current.danger ? "danger" : "primary"} onClick={() => close(true)}>{current.confirmText}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Collapsible CPs ───
 function CollapsibleCPs({ cps, color = "blue", previewCount = 3 }) {
   const [expanded, setExpanded] = useState(false);
@@ -526,7 +584,19 @@ function ZonesPanel({ zones, setZones }) {
     setName(""); setCps("");
   };
 
-  const remove = (id) => setZones((prev) => prev.filter((z) => z.id !== id));
+  const remove = async (id) => {
+    const zone = zones.find((z) => z.id === id);
+    if (!zone) return;
+    const ok = await confirmDialog({
+      title: "Borrar zona",
+      message: `¿Querés borrar la zona "${zone.name}"? Tiene ${zone.cps.length} CP${zone.cps.length !== 1 ? "s" : ""} asociado${zone.cps.length !== 1 ? "s" : ""}.`,
+      confirmText: "Borrar zona",
+      danger: true,
+    });
+    if (!ok) return;
+    setZones((prev) => prev.filter((z) => z.id !== id));
+    toast(`Zona "${zone.name}" borrada`);
+  };
 
   return (
     <Card title="Zonas de envío" icon="🗺️" accent="#60a5fa">
@@ -803,7 +873,19 @@ function CarriersPanel({ carriers, setCarriers, zones }) {
     }]);
     setName(""); setCps(""); setLimit(""); setPriority("COMERCIAL");
   };
-  const remove = (id) => setCarriers((prev) => prev.filter((c) => c.id !== id));
+  const remove = async (id) => {
+    const carrier = carriers.find((c) => c.id === id);
+    if (!carrier) return;
+    const ok = await confirmDialog({
+      title: "Borrar transportista",
+      message: `¿Querés borrar el transportista "${carrier.name}"?`,
+      confirmText: "Borrar transportista",
+      danger: true,
+    });
+    if (!ok) return;
+    setCarriers((prev) => prev.filter((c) => c.id !== id));
+    toast(`Transportista "${carrier.name}" borrado`);
+  };
   const update = (updated) => setCarriers((prev) => prev.map((c) => c.id === updated.id ? updated : c));
 
   return (
@@ -1187,6 +1269,7 @@ function ResultsDashboard({ shipments, zones, carriers, setZones, currentClient 
 
   // Manual overrides: envio -> carrierId | "EXTRA"
   const [manualOverrides, setManualOverrides] = useState({});
+  const [carrierFilter, setCarrierFilter] = useState(null); // null | "all" | "extra" | carrierId
   const [savedToHistory, setSavedToHistory] = useState(false);
   const [savingHistory, setSavingHistory] = useState(false);
 
@@ -1729,7 +1812,22 @@ ${carriers.length > 0 ? `
               <div key={ca.carrier.id} style={{ padding: "12px 14px", background: "#faf8f3", borderRadius: 3, border: "1px solid #c9c3b2" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: ca.shipments.length ? 8 : 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ color: "#1a1a1a", fontWeight: 700, fontSize: 14 }}>{ca.carrier.name}</span>
+                    <button
+                      onClick={() => { setCarrierFilter(ca.carrier.id); toast(`Filtrando por ${ca.carrier.name}`); }}
+                      disabled={ca.shipments.length === 0}
+                      title={ca.shipments.length > 0 ? "Click para filtrar la tabla por este transportista" : ""}
+                      style={{
+                        color: "#1a1a1a", fontWeight: 700, fontSize: 14,
+                        background: "none", border: "none", padding: 0,
+                        cursor: ca.shipments.length > 0 ? "pointer" : "default",
+                        textDecoration: ca.shipments.length > 0 ? "underline" : "none",
+                        textDecorationStyle: "dotted", textDecorationColor: "#a8a08a",
+                        textUnderlineOffset: 3,
+                        fontFamily: "inherit",
+                      }}
+                    >
+                      {ca.carrier.name}
+                    </button>
                     {ca.carrier.limit && <Badge color="orange">Tope: {ca.carrier.limit}</Badge>}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1771,7 +1869,22 @@ ${carriers.length > 0 ? `
             {/* Extra */}
             <div style={{ padding: "12px 14px", background: "#faf8f3", borderRadius: 3, border: "1px solid #e0b5b5" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: extra.length ? 8 : 0 }}>
-                <span style={{ color: "#b91c1c", fontWeight: 700, fontSize: 14 }}>EXTRA (sin transportista)</span>
+                <button
+                  onClick={() => { setCarrierFilter("extra"); toast("Filtrando por EXTRA"); }}
+                  disabled={extra.length === 0}
+                  title={extra.length > 0 ? "Click para filtrar la tabla por EXTRA" : ""}
+                  style={{
+                    color: "#b91c1c", fontWeight: 700, fontSize: 14,
+                    background: "none", border: "none", padding: 0,
+                    cursor: extra.length > 0 ? "pointer" : "default",
+                    textDecoration: extra.length > 0 ? "underline" : "none",
+                    textDecorationStyle: "dotted", textDecorationColor: "#e0b5b5",
+                    textUnderlineOffset: 3,
+                    fontFamily: "inherit",
+                  }}
+                >
+                  EXTRA (sin transportista)
+                </button>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <Badge color="red">{extra.length} envío{extra.length !== 1 ? "s" : ""}</Badge>
                   {extra.length > 0 && (
@@ -1821,7 +1934,13 @@ ${carriers.length > 0 ? `
       )}
 
       {/* Detail table */}
-      <DetailTable flex={flex} carrierAssignments={carrierAssignments} carriers={carriers} />
+      <DetailTable
+        flex={flex}
+        carrierAssignments={carrierAssignments}
+        carriers={carriers}
+        externalFilterCarrier={carrierFilter}
+        onClearExternalFilter={() => setCarrierFilter(null)}
+      />
     </div>
   );
 }
@@ -1949,11 +2068,27 @@ function InfoRow({ label, value, style }) {
 }
 
 // ─── Detail Table with search/filter ───
-function DetailTable({ flex, carrierAssignments, carriers }) {
+function DetailTable({ flex, carrierAssignments, carriers, externalFilterCarrier, onClearExternalFilter }) {
   const [search, setSearch] = useState("");
-  const [filterCarrier, setFilterCarrier] = useState("all");
+  const [internalFilterCarrier, setInternalFilterCarrier] = useState("all");
   const [filterTipo, setFilterTipo] = useState("all");
   const [previewShipment, setPreviewShipment] = useState(null);
+
+  // If external filter is set, use it (priority); otherwise use internal
+  const filterCarrier = externalFilterCarrier != null ? externalFilterCarrier : internalFilterCarrier;
+  const setFilterCarrier = (val) => {
+    // When user changes via select, always clear external too
+    if (onClearExternalFilter) onClearExternalFilter();
+    setInternalFilterCarrier(val);
+  };
+
+  // Scroll into view when external filter changes
+  const tableRef = useRef();
+  useEffect(() => {
+    if (externalFilterCarrier != null && tableRef.current) {
+      tableRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [externalFilterCarrier]);
 
   // Find which carrier a specific label belongs to (by reference, not envio)
   const getCarrier = (shipment) => carrierAssignments.find((ca) => ca.shipments.includes(shipment));
@@ -1981,7 +2116,17 @@ function DetailTable({ flex, carrierAssignments, carriers }) {
   });
 
   return (
+    <div ref={tableRef}>
     <Card title="Detalle de envíos FLEX" icon="📋">
+      {/* External filter indicator */}
+      {externalFilterCarrier != null && externalFilterCarrier !== "all" && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "#fef3e7", border: "1px solid #e3c893", borderRadius: 3, marginBottom: 10 }}>
+          <span style={{ color: "#b45309", fontSize: 12, fontWeight: 600 }}>
+            🔍 Filtrando por: {externalFilterCarrier === "extra" ? "EXTRA" : (carriers.find((c) => String(c.id) === String(externalFilterCarrier))?.name || "?")}
+          </span>
+          <Btn small variant="ghost" onClick={onClearExternalFilter}>✕ Limpiar</Btn>
+        </div>
+      )}
       {/* Filters */}
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
         <Input
@@ -2077,6 +2222,7 @@ function DetailTable({ flex, carrierAssignments, carriers }) {
         onClose={() => setPreviewShipment(null)}
       />
     </Card>
+    </div>
   );
 }
 
@@ -2105,10 +2251,17 @@ function HistoryPanel() {
   }, [selectedDate]);
 
   const handleDelete = async (entryId) => {
-    if (!confirm("¿Borrar esta entrada del historial?")) return;
+    const ok = await confirmDialog({
+      title: "Borrar entrada",
+      message: "¿Querés borrar esta entrada del historial? Esta acción no se puede deshacer.",
+      confirmText: "Borrar",
+      danger: true,
+    });
+    if (!ok) return;
     await deleteHistoryEntry(selectedDate, entryId);
     const e = await loadHistoryDay(selectedDate);
     setEntries(e);
+    toast("Entrada borrada");
     // If no entries left, refresh dates
     if (e.length === 0) {
       const d = await loadHistoryDates();
@@ -2443,6 +2596,42 @@ export default function App() {
 
         {tab === "upload" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {(zones.length === 0 || carriers.length === 0) && (
+              <div style={{ padding: "14px 16px", background: "#fdf3e3", border: "1px solid #e3c893", borderLeft: "4px solid #b45309", borderRadius: 3 }}>
+                <div style={{ color: "#b45309", fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>
+                  ⚠ Configuración pendiente
+                </div>
+                <div style={{ color: "#4a4a4a", fontSize: 13, marginBottom: 10 }}>
+                  Antes de procesar etiquetas te conviene configurar:
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                    <span style={{ fontSize: 14 }}>{zones.length > 0 ? "✅" : "⬜"}</span>
+                    <span style={{ color: zones.length > 0 ? "#15803d" : "#1a1a1a", textDecoration: zones.length > 0 ? "line-through" : "none" }}>
+                      <strong>Zonas de envío</strong> — agrupan códigos postales por región
+                    </span>
+                    {zones.length === 0 && <span style={{ color: "#7a7a6e", fontSize: 11 }}>(ninguna)</span>}
+                    {zones.length > 0 && <span style={{ color: "#555", fontSize: 11 }}>({zones.length} configurada{zones.length !== 1 ? "s" : ""})</span>}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                    <span style={{ fontSize: 14 }}>{carriers.length > 0 ? "✅" : "⬜"}</span>
+                    <span style={{ color: carriers.length > 0 ? "#15803d" : "#1a1a1a", textDecoration: carriers.length > 0 ? "line-through" : "none" }}>
+                      <strong>Transportistas</strong> — qué CPs se lleva cada uno, con topes
+                    </span>
+                    {carriers.length === 0 && <span style={{ color: "#7a7a6e", fontSize: 11 }}>(ninguno)</span>}
+                    {carriers.length > 0 && <span style={{ color: "#555", fontSize: 11 }}>({carriers.length} configurado{carriers.length !== 1 ? "s" : ""})</span>}
+                  </div>
+                </div>
+                <div style={{ marginTop: 12 }}>
+                  <Btn small variant="secondary" onClick={() => setTab("config")}>
+                    Ir a configuración →
+                  </Btn>
+                </div>
+                <div style={{ marginTop: 8, color: "#7a7a6e", fontSize: 11, fontStyle: "italic" }}>
+                  Podés procesar sin configurar, pero los envíos no se van a agrupar ni asignar.
+                </div>
+              </div>
+            )}
             <FileUpload onParsed={handleParsed} clients={clients} setClients={setClients} />
             {shipments && (
               <div style={{ padding: "12px 16px", background: "#e8f3ec", borderRadius: 3, border: "1px solid #b5d4bf", borderLeft: "4px solid #15803d" }}>
@@ -2479,6 +2668,7 @@ export default function App() {
         )}
       </div>
       <ToastContainer />
+      <ConfirmModalContainer />
     </div>
   );
 }
