@@ -2016,11 +2016,15 @@ function HistoryPanel() {
     return date.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   };
 
-  // Print full day report grouped by client
-  const printDaySummary = () => {
+  // Print day report - if clientFilter is given, only that client; otherwise all
+  const printDaySummary = (clientFilter = null) => {
     if (!selectedDate || entries.length === 0) return;
 
-    const clientsHtml = Object.entries(byClient).map(([client, list]) => {
+    const clientsToShow = clientFilter
+      ? { [clientFilter]: byClient[clientFilter] || [] }
+      : byClient;
+
+    const clientsHtml = Object.entries(clientsToShow).map(([client, list]) => {
       // Aggregate all data for this client across entries
       const allCarrierAssignments = {};
       let allExtra = [];
@@ -2125,7 +2129,7 @@ function HistoryPanel() {
     }).join("");
 
     const html = `<!DOCTYPE html>
-<html lang="es"><head><meta charset="UTF-8"><title>Resumen diario - ${formatDate(selectedDate)}</title>
+<html lang="es"><head><meta charset="UTF-8"><title>${clientFilter ? `${clientFilter} - ${formatDate(selectedDate)}` : `Resumen diario - ${formatDate(selectedDate)}`}</title>
 <style>
   * { box-sizing: border-box; }
   body { font-family: -apple-system, "Segoe UI", sans-serif; color: #222; margin: 0; padding: 24px; }
@@ -2151,7 +2155,7 @@ function HistoryPanel() {
 </style></head>
 <body>
 <div class="no-print"><button onclick="window.print()">🖨️ Imprimir / Guardar PDF</button></div>
-<h1>Resumen del día</h1>
+<h1>${clientFilter ? `Resumen · ${clientFilter}` : "Resumen del día"}</h1>
 <div class="subtitle">${formatDate(selectedDate)}</div>
 ${clientsHtml}
 <div class="footer">Generado el ${new Date().toLocaleString("es-AR")}</div>
@@ -2220,16 +2224,21 @@ ${clientsHtml}
                 <div style={{ fontSize: 11, color: "#8b949e" }}>Unidades</div>
               </div>
             </div>
-            <Btn onClick={printDaySummary} style={{ width: "100%", padding: "12px 20px", fontSize: 14, justifyContent: "center", borderRadius: 10 }}>
-              🖨️ Imprimir resumen del día (por cliente)
+            <Btn onClick={() => printDaySummary()} style={{ width: "100%", padding: "12px 20px", fontSize: 14, justifyContent: "center", borderRadius: 10 }}>
+              🖨️ Imprimir resumen del día (todos los clientes)
             </Btn>
           </Card>
 
           {/* Entries by client */}
           {Object.entries(byClient).map(([client, list]) => (
             <Card key={client} title={`🏢 ${client}`} accent="#60a5fa">
-              <div style={{ fontSize: 12, color: "#8b949e", marginBottom: 10 }}>
-                {list.length} carga{list.length !== 1 ? "s" : ""} · {list.reduce((n, e) => n + (e.totals?.flex || 0), 0)} FLEX · {list.reduce((n, e) => n + (e.totals?.colecta || 0), 0)} COLECTA · {list.reduce((n, e) => n + (e.totals?.units || 0), 0)} unidades
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
+                <div style={{ fontSize: 12, color: "#8b949e" }}>
+                  {list.length} carga{list.length !== 1 ? "s" : ""} · {list.reduce((n, e) => n + (e.totals?.flex || 0), 0)} FLEX · {list.reduce((n, e) => n + (e.totals?.colecta || 0), 0)} COLECTA · {list.reduce((n, e) => n + (e.totals?.units || 0), 0)} unidades
+                </div>
+                <Btn small variant="secondary" onClick={() => printDaySummary(client)}>
+                  🖨️ Imprimir este cliente
+                </Btn>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {list.map((entry) => {
