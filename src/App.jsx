@@ -19,6 +19,7 @@ async function saveCarriers(carriers) {
 
 function parseZPL(text) {
   const shipments = [];
+  const flexByEnvio = {}; // envio -> shipment
   // Extract every individual ^XA...^XZ label
   const allLabels = text.match(/\^XA[\s\S]*?\^XZ/g);
   if (!allLabels) return shipments;
@@ -37,44 +38,61 @@ function parseZPL(text) {
 
     const isFlex = lab.includes("Flex");
 
-    let cp = null;
-    let envioNum = null;
-    let destinatario = null;
-    let localidad = null;
-    let tipoEnvio = null;
-
     if (isFlex) {
-      // FLEX: CP is the big one below QR
       const cpM = lab.match(/FB890,1,0,C.*?FD(\d{4})/);
       const envM = lab.match(/Envio: (\d+)/);
       const destM = lab.match(/Destinatario: ([^\^(]+)/);
       const locM = lab.match(/FO0,660.*?FD([^\^]+)/);
       const tipoM = lab.match(/FO0,770.*?FD([^\^]+)/);
-      if (cpM) cp = cpM[1];
-      if (envM) envioNum = envM[1];
-      if (destM) destinatario = destM[1].trim();
-      if (locM) localidad = locM[1].replace(/_C3_[A-F0-9]{2}/g, "").trim();
-      if (tipoM) tipoEnvio = tipoM[1].trim();
+
+      const envioNum = envM ? envM[1] : null;
+      const cp = cpM ? cpM[1] : null;
+      const destinatario = destM ? destM[1].trim() : null;
+      const localidad = locM ? locM[1].replace(/_C3_[A-F0-9]{2}/g, "").trim() : null;
+      const tipoEnvio = tipoM ? tipoM[1].trim() : null;
+
+      if (envioNum && flexByEnvio[envioNum]) {
+        // Existing envio: merge items and label
+        flexByEnvio[envioNum].items.push({ sku, qty });
+        flexByEnvio[envioNum].rawLabels.push(lab);
+      } else {
+        // New envio (or envio without number - treat as separate)
+        const key = envioNum || `_nolabel_${Math.random()}`;
+        flexByEnvio[key] = {
+          type: "FLEX",
+          cp,
+          envio: envioNum,
+          destinatario,
+          localidad,
+          tipoEnvio,
+          items: [{ sku, qty }],
+          rawLabels: [lab],
+        };
+      }
     } else {
-      // COLECTA: CP from text pattern, deduplicated
+      // COLECTA: CP from text pattern, deduplicated. Each colecta label = independent
+      let cp = null;
       const cpMatches = lab.match(/CP[:\s]+(\d{4})/g);
       if (cpMatches) {
         const cps = cpMatches.map((m) => m.match(/(\d{4})/)[1]);
-        cp = [...new Set(cps)][0]; // first unique CP
+        cp = [...new Set(cps)][0];
       }
+      shipments.push({
+        type: "COLECTA",
+        cp,
+        envio: null,
+        destinatario: null,
+        localidad: null,
+        tipoEnvio: null,
+        items: [{ sku, qty }],
+        rawLabels: [lab],
+      });
     }
-
-    shipments.push({
-      type: isFlex ? "FLEX" : "COLECTA",
-      cp,
-      envio: envioNum,
-      destinatario,
-      localidad,
-      tipoEnvio,
-      items: [{ sku, qty }],
-      rawLabels: [lab],
-    });
   }
+
+  // Add grouped flex shipments
+  for (const s of Object.values(flexByEnvio)) shipments.push(s);
+
   return shipments;
 }
 
@@ -985,23 +1003,33 @@ function ResultsDashboard({ shipments, zones, carriers, setZones }) {
   // Helper: find which zone a CP belongs to
   const getZoneForCP = (cp) => zones.find((z) => z.cps.includes(cp));
 
-  for (const c of carriers) {
-    const matching = flex.filter((s) => s.cp && c.cps.includes(s.cp) && !assigned.has(s.envio));
+  // Group flex labels by envio number so all labels of same envio stay together
+  const flexByEnvio = {};
+  for (const s of flex) {
+    const key = s.envio || `_noenvio_${Math.random()}`;
+    if (!flexByEnvio[key]) flexByEnvio[key] = [];
+    flexByEnvio[key].push(s);
+  }
 
-    // Sort by priority
+  for (const c of carriers) {
+    // Get envios (groups) matching this carrier's CPs
+    const matchingGroups = Object.entries(flexByEnvio)
+      .filter(([key, group]) => !assigned.has(key) && group[0].cp && c.cps.includes(group[0].cp))
+      .map(([key, group]) => ({ key, group }));
+
+    // Sort by priority (using first label's attributes)
     const priorityType = c.priority || "COMERCIAL";
     const prioCps = (c.priorityCps || []).map(Number);
 
-    matching.sort((a, b) => {
-      // 1) Type priority: preferred type first
-      const aTypeScore = (a.tipoEnvio === priorityType) ? 0 : 1;
-      const bTypeScore = (b.tipoEnvio === priorityType) ? 0 : 1;
+    matchingGroups.sort((a, b) => {
+      const sa = a.group[0], sb = b.group[0];
+      const aTypeScore = (sa.tipoEnvio === priorityType) ? 0 : 1;
+      const bTypeScore = (sb.tipoEnvio === priorityType) ? 0 : 1;
       if (aTypeScore !== bTypeScore) return aTypeScore - bTypeScore;
 
-      // 2) CP priority: exact match first, then closest numerically
       if (prioCps.length > 0) {
-        const aCp = Number(a.cp);
-        const bCp = Number(b.cp);
+        const aCp = Number(sa.cp);
+        const bCp = Number(sb.cp);
         const aExact = prioCps.includes(aCp) ? 0 : 1;
         const bExact = prioCps.includes(bCp) ? 0 : 1;
         if (aExact !== bExact) return aExact - bExact;
@@ -1014,69 +1042,74 @@ function ResultsDashboard({ shipments, zones, carriers, setZones }) {
       return 0;
     });
 
-    // Apply zone limits + total limit
+    // Apply zone limits + total limit. Count envios (groups), not individual labels.
     const zoneLimits = c.zoneLimits || {};
     const zoneCounts = {};
     const taken = [];
     const overflow = [];
+    let takenCount = 0;
 
-    for (const s of matching) {
-      // Check total limit
-      if (c.limit && taken.length >= c.limit) {
-        overflow.push(s);
+    for (const { key, group } of matchingGroups) {
+      const firstLabel = group[0];
+      // Check total limit (1 envio = 1 group, regardless of label count)
+      if (c.limit && takenCount >= c.limit) {
+        overflow.push(...group);
+        assigned.add(key); // Mark as assigned so no other carrier takes it
         continue;
       }
       // Check zone limit
-      const zone = getZoneForCP(s.cp);
+      const zone = getZoneForCP(firstLabel.cp);
       if (zone && zoneLimits[zone.id]) {
         const count = zoneCounts[zone.id] || 0;
         if (count >= zoneLimits[zone.id]) {
-          overflow.push(s);
+          overflow.push(...group);
+          assigned.add(key);
           continue;
         }
         zoneCounts[zone.id] = count + 1;
       }
-      taken.push(s);
+      taken.push(...group);
+      takenCount += 1;
+      assigned.add(key);
     }
 
-    taken.forEach((s) => assigned.add(s.envio));
     carrierAssignments.push({ carrier: c, shipments: taken, overflow });
   }
-  let extra = flex.filter((s) => !assigned.has(s.envio));
+  // Everything not in a carrier's shipments goes to extra (includes overflow from carriers)
+  const takenSet = new Set();
+  for (const ca of carrierAssignments) {
+    for (const s of ca.shipments) takenSet.add(s);
+  }
+  let extra = flex.filter((s) => !takenSet.has(s));
 
-  // Apply manual overrides
+  // Apply manual overrides (moves ALL labels of same envio together)
   if (Object.keys(manualOverrides).length > 0) {
-    // Build current assignment map: envio -> location
-    const locateEnvio = (envio) => {
-      for (const ca of carrierAssignments) {
-        if (ca.shipments.some((s) => s.envio === envio)) return { type: "carrier", carrierId: ca.carrier.id };
-      }
-      return { type: "extra" };
-    };
-
-    // Collect all flex shipments by envio
-    const envioMap = {};
+    // Collect all flex labels by envio (keeping all, not just last)
+    const labelsByEnvio = {};
     for (const s of flex) {
-      if (s.envio) envioMap[s.envio] = s;
+      if (s.envio) {
+        if (!labelsByEnvio[s.envio]) labelsByEnvio[s.envio] = [];
+        labelsByEnvio[s.envio].push(s);
+      }
     }
 
     for (const [envio, target] of Object.entries(manualOverrides)) {
-      const ship = envioMap[envio];
-      if (!ship) continue;
+      const ships = labelsByEnvio[envio];
+      if (!ships || ships.length === 0) continue;
 
-      // Remove from current location
+      // Remove ALL labels of this envio from current locations
       for (const ca of carrierAssignments) {
         ca.shipments = ca.shipments.filter((s) => s.envio !== envio);
       }
       extra = extra.filter((s) => s.envio !== envio);
 
-      // Add to target
+      // Add all labels to target
       if (target === "EXTRA") {
-        extra.push(ship);
+        extra.push(...ships);
       } else {
         const targetCa = carrierAssignments.find((ca) => String(ca.carrier.id) === String(target));
-        if (targetCa) targetCa.shipments.push(ship);
-        else extra.push(ship);
+        if (targetCa) targetCa.shipments.push(...ships);
+        else extra.push(...ships);
       }
     }
   }
@@ -1200,7 +1233,7 @@ function ResultsDashboard({ shipments, zones, carriers, setZones }) {
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     {ca.shipments.map((s) => (
                       <EnvioChip
-                        key={s.envio}
+                        key={s.uid || s.envio}
                         shipment={s}
                         currentLocation={ca.carrier.id}
                         carriers={carriers}
@@ -1235,7 +1268,7 @@ function ResultsDashboard({ shipments, zones, carriers, setZones }) {
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   {extra.map((s) => (
                     <EnvioChip
-                      key={s.envio || Math.random()}
+                      key={s.uid || s.envio || Math.random()}
                       shipment={s}
                       currentLocation="EXTRA"
                       carriers={carriers}
@@ -1270,12 +1303,13 @@ function DetailTable({ flex, carrierAssignments, carriers }) {
   const [filterCarrier, setFilterCarrier] = useState("all"); // "all" | carrierId | "extra"
   const [filterTipo, setFilterTipo] = useState("all"); // "all" | "COMERCIAL" | "RESIDENCIAL"
 
-  const getCarrier = (envio) => carrierAssignments.find((ca) => ca.shipments.some((cs) => cs.envio === envio));
+  // Find which carrier a specific label belongs to (by reference, not envio)
+  const getCarrier = (shipment) => carrierAssignments.find((ca) => ca.shipments.includes(shipment));
 
   const filtered = flex.filter((s) => {
     // Carrier filter
     if (filterCarrier !== "all") {
-      const ca = getCarrier(s.envio);
+      const ca = getCarrier(s);
       if (filterCarrier === "extra") {
         if (ca) return false;
       } else {
@@ -1343,9 +1377,9 @@ function DetailTable({ flex, carrierAssignments, carriers }) {
           </thead>
           <tbody>
             {filtered.map((s) => {
-              const assignedCarrier = getCarrier(s.envio);
+              const assignedCarrier = getCarrier(s);
               return (
-                <tr key={s.envio} style={{ borderBottom: "1px solid #21262d" }}>
+                <tr key={s.uid || s.envio} style={{ borderBottom: "1px solid #21262d" }}>
                   <td style={{ padding: "8px 10px", color: "#e6edf3", fontFamily: "monospace" }}>{s.envio}</td>
                   <td style={{ padding: "8px 10px" }}><Badge color="blue">{s.cp}</Badge></td>
                   <td style={{ padding: "8px 10px" }}>
