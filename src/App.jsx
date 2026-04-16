@@ -190,6 +190,80 @@ function CollapsibleCPs({ cps, color = "blue", previewCount = 3 }) {
   );
 }
 
+// ─── Zone Card ───
+function ZoneCard({ zone, zones, onRemove, onUpdate }) {
+  const [adding, setAdding] = useState(false);
+  const [newCps, setNewCps] = useState("");
+  const [error, setError] = useState(null);
+
+  const addCps = () => {
+    if (!newCps.trim()) return;
+    const cpList = newCps.split(/[,;\s]+/).map((c) => c.trim()).filter(Boolean);
+
+    // Check duplicates within same zone
+    const existing = new Set(zone.cps);
+    const alreadyInZone = cpList.filter((cp) => existing.has(cp));
+
+    // Check duplicates in other zones
+    const otherCps = {};
+    for (const z of zones) {
+      if (z.id === zone.id) continue;
+      for (const cp of z.cps) otherCps[cp] = z.name;
+    }
+    const inOtherZone = cpList.filter((cp) => otherCps[cp]);
+
+    if (inOtherZone.length > 0) {
+      setError(`CP${inOtherZone.length > 1 ? "s" : ""} ${inOtherZone.join(", ")} ya está${inOtherZone.length > 1 ? "n" : ""} en ${[...new Set(inOtherZone.map((cp) => otherCps[cp]))].join(", ")}`);
+      return;
+    }
+
+    const uniqueNew = cpList.filter((cp) => !existing.has(cp));
+    if (uniqueNew.length === 0) {
+      setError("Esos CPs ya están en esta zona");
+      return;
+    }
+
+    onUpdate({ ...zone, cps: [...zone.cps, ...uniqueNew] });
+    setNewCps("");
+    setAdding(false);
+    setError(null);
+  };
+
+  return (
+    <div style={{ padding: "10px 14px", background: "#0d1117", borderRadius: 8, marginBottom: 6, border: "1px solid #21262d" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ color: "#e6edf3", fontWeight: 600, fontSize: 14 }}>{zone.name}</span>
+          <Badge color="gray">{zone.cps.length} CPs</Badge>
+          <CollapsibleCPs cps={zone.cps} color="blue" />
+        </div>
+        <div style={{ display: "flex", gap: 4 }}>
+          <Btn variant="secondary" small onClick={() => { setAdding(!adding); setError(null); }}>
+            {adding ? "Cancelar" : "+ CP"}
+          </Btn>
+          <Btn variant="ghost" small onClick={onRemove}>✕</Btn>
+        </div>
+      </div>
+      {adding && (
+        <div style={{ marginTop: 8 }}>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <Input
+              value={newCps}
+              onChange={setNewCps}
+              placeholder="Nuevos CPs: 1500, 1501, 1502"
+              style={{ flex: "1 1 200px", fontSize: 12, padding: "5px 10px" }}
+            />
+            <Btn small onClick={addCps}>Agregar</Btn>
+          </div>
+          {error && (
+            <p style={{ color: "#f87171", fontSize: 12, margin: "6px 0 0 0" }}>⚠ {error}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Zones Panel ───
 function ZonesPanel({ zones, setZones }) {
   const [name, setName] = useState("");
@@ -374,14 +448,7 @@ function ZonesPanel({ zones, setZones }) {
 
       {zones.length === 0 && <p style={{ color: "#484f58", fontSize: 13, textAlign: "center", padding: 20 }}>No hay zonas configuradas</p>}
       {zones.map((z) => (
-        <div key={z.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#0d1117", borderRadius: 8, marginBottom: 6, border: "1px solid #21262d" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span style={{ color: "#e6edf3", fontWeight: 600, fontSize: 14 }}>{z.name}</span>
-            <Badge color="gray">{z.cps.length} CPs</Badge>
-            <CollapsibleCPs cps={z.cps} color="blue" />
-          </div>
-          <Btn variant="ghost" small onClick={() => remove(z.id)}>✕</Btn>
-        </div>
+        <ZoneCard key={z.id} zone={z} zones={zones} onRemove={() => remove(z.id)} onUpdate={(updated) => setZones((prev) => prev.map((zz) => zz.id === updated.id ? updated : zz))} />
       ))}
     </Card>
   );
