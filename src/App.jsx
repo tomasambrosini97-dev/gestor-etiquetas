@@ -144,18 +144,43 @@ function groupSkus(items) {
 
 // ─── Components ───
 
+// ─── Design tokens (industrial theme) ───
+const T = {
+  paper: "#f5f2ea",
+  surface: "#ffffff",
+  surfaceAlt: "#faf8f3",
+  border: "#c9c3b2",
+  borderStrong: "#a8a08a",
+  ink: "#1a1a1a",
+  inkDim: "#4a4a4a",
+  inkMute: "#7a7a6e",
+  accent: "#ea580c",
+  accentDark: "#c2410c",
+  accentLight: "#fef3e7",
+  success: "#15803d",
+  successLight: "#e8f3ec",
+  warning: "#b45309",
+  warningLight: "#fdf3e3",
+  danger: "#b91c1c",
+  dangerLight: "#fbe9e9",
+  info: "#1e3a5f",
+  infoLight: "#e7eef5",
+  purple: "#6b21a8",
+  purpleLight: "#f1e7f7",
+};
+
 function Badge({ children, color = "blue" }) {
   const colors = {
-    blue: { bg: "#1a2942", text: "#60a5fa", border: "#2a4a6b" },
-    green: { bg: "#1a3328", text: "#4ade80", border: "#2a5a40" },
-    orange: { bg: "#3b2a1a", text: "#fb923c", border: "#5a3a1a" },
-    red: { bg: "#3b1a1a", text: "#f87171", border: "#5a2a2a" },
-    purple: { bg: "#2a1a42", text: "#c084fc", border: "#3a2a5a" },
-    gray: { bg: "#2a2a2a", text: "#a0a0a0", border: "#3a3a3a" },
+    blue: { bg: T.infoLight, text: T.info, border: "#c2cfde" },
+    green: { bg: T.successLight, text: T.success, border: "#b5d4bf" },
+    orange: { bg: T.warningLight, text: T.warning, border: "#e3c893" },
+    red: { bg: T.dangerLight, text: T.danger, border: "#e0b5b5" },
+    purple: { bg: T.purpleLight, text: T.purple, border: "#d5b9df" },
+    gray: { bg: "#ecebe4", text: T.inkDim, border: T.border },
   };
   const c = colors[color] || colors.blue;
   return (
-    <span style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, padding: "2px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>
+    <span style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, padding: "2px 8px", borderRadius: 3, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", letterSpacing: "0.02em", textTransform: "uppercase" }}>
       {children}
     </span>
   );
@@ -163,10 +188,10 @@ function Badge({ children, color = "blue" }) {
 
 function Card({ children, title, icon, accent, style }) {
   return (
-    <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 12, padding: 20, borderTop: accent ? `3px solid ${accent}` : undefined, ...style }}>
+    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 4, padding: 16, boxShadow: "0 1px 2px rgba(0,0,0,0.04)", ...style }}>
       {title && (
-        <h3 style={{ margin: "0 0 14px 0", fontSize: 15, fontWeight: 700, color: "#e6edf3", display: "flex", alignItems: "center", gap: 8 }}>
-          {icon && <span style={{ fontSize: 18 }}>{icon}</span>}
+        <h3 style={{ margin: "0 0 12px 0", fontSize: 13, fontWeight: 700, color: T.ink, display: "flex", alignItems: "center", gap: 6, textTransform: "uppercase", letterSpacing: "0.04em", paddingBottom: 8, borderBottom: `1px solid ${T.border}` }}>
+          {icon && <span style={{ fontSize: 15 }}>{icon}</span>}
           {title}
         </h3>
       )}
@@ -182,24 +207,38 @@ function Input({ value, onChange, placeholder, style, type = "text" }) {
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: 8, padding: "8px 12px", color: "#e6edf3", fontSize: 14, outline: "none", width: "100%", boxSizing: "border-box", ...style }}
+      style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 3, padding: "7px 10px", color: T.ink, fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "inherit", ...style }}
+      onFocus={(e) => e.currentTarget.style.borderColor = T.accent}
+      onBlur={(e) => e.currentTarget.style.borderColor = T.border}
     />
   );
 }
 
 function Btn({ children, onClick, variant = "primary", disabled, style, small }) {
   const variants = {
-    primary: { bg: "#238636", hover: "#2ea043", text: "#fff" },
-    secondary: { bg: "#21262d", hover: "#30363d", text: "#c9d1d9" },
-    danger: { bg: "#da3633", hover: "#f85149", text: "#fff" },
-    ghost: { bg: "transparent", hover: "#21262d", text: "#8b949e" },
+    primary: { bg: T.accent, hover: T.accentDark, text: "#fff", border: T.accent },
+    secondary: { bg: T.surface, hover: "#f0ece2", text: T.ink, border: T.borderStrong },
+    danger: { bg: T.danger, hover: "#991b1b", text: "#fff", border: T.danger },
+    ghost: { bg: "transparent", hover: "#ecebe4", text: T.inkDim, border: "transparent" },
   };
   const v = variants[variant];
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      style={{ background: disabled ? "#21262d" : v.bg, color: disabled ? "#484f58" : v.text, border: "1px solid #30363d", borderRadius: 8, padding: small ? "4px 12px" : "8px 16px", fontSize: small ? 12 : 13, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer", transition: "all .15s", display: "inline-flex", alignItems: "center", gap: 6, ...style }}
+      style={{
+        background: disabled ? "#e5e1d5" : v.bg,
+        color: disabled ? T.inkMute : v.text,
+        border: `1px solid ${disabled ? T.border : v.border}`,
+        borderRadius: 3, padding: small ? "4px 10px" : "7px 14px",
+        fontSize: small ? 11 : 12, fontWeight: 700,
+        cursor: disabled ? "not-allowed" : "pointer",
+        transition: "all .12s", display: "inline-flex", alignItems: "center", gap: 5,
+        textTransform: "uppercase", letterSpacing: "0.04em",
+        fontFamily: "inherit", ...style
+      }}
+      onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.background = v.hover; }}
+      onMouseLeave={(e) => { if (!disabled) e.currentTarget.style.background = v.bg; }}
     >
       {children}
     </button>
@@ -208,16 +247,22 @@ function Btn({ children, onClick, variant = "primary", disabled, style, small })
 
 function TabBar({ tabs, active, onChange }) {
   return (
-    <div style={{ display: "flex", gap: 2, background: "#0d1117", borderRadius: 10, padding: 3, marginBottom: 20 }}>
-      {tabs.map((t) => (
+    <div style={{ display: "flex", gap: 0, background: T.surface, borderRadius: 4, border: `1px solid ${T.border}`, marginBottom: 16, overflow: "hidden" }}>
+      {tabs.map((t, i) => (
         <button
           key={t.id}
           onClick={() => onChange(t.id)}
           style={{
-            flex: 1, padding: "10px 16px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, transition: "all .15s",
-            background: active === t.id ? "#238636" : "transparent",
-            color: active === t.id ? "#fff" : "#8b949e",
+            flex: 1, padding: "10px 14px", border: "none", cursor: "pointer",
+            fontSize: 12, fontWeight: 700, transition: "all .12s",
+            background: active === t.id ? T.accent : "transparent",
+            color: active === t.id ? "#fff" : T.inkDim,
+            borderLeft: i === 0 ? "none" : `1px solid ${T.border}`,
+            textTransform: "uppercase", letterSpacing: "0.04em",
+            fontFamily: "inherit",
           }}
+          onMouseEnter={(e) => { if (active !== t.id) e.currentTarget.style.background = "#f0ece2"; }}
+          onMouseLeave={(e) => { if (active !== t.id) e.currentTarget.style.background = "transparent"; }}
         >
           {t.icon} {t.label}
         </button>
@@ -237,7 +282,7 @@ function CollapsibleCPs({ cps, color = "blue", previewCount = 3 }) {
       {showToggle && (
         <button
           onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
-          style={{ background: "none", border: "1px solid #30363d", borderRadius: 12, padding: "2px 8px", fontSize: 11, color: "#8b949e", cursor: "pointer", whiteSpace: "nowrap" }}
+          style={{ background: "none", border: "1px solid #c9c3b2", borderRadius: 4, padding: "2px 8px", fontSize: 11, color: "#555555", cursor: "pointer", whiteSpace: "nowrap" }}
         >
           {expanded ? "▲ ocultar" : `+${cps.length - previewCount} más`}
         </button>
@@ -286,10 +331,10 @@ function ZoneCard({ zone, zones, onRemove, onUpdate }) {
   };
 
   return (
-    <div style={{ padding: "10px 14px", background: "#0d1117", borderRadius: 8, marginBottom: 6, border: "1px solid #21262d" }}>
+    <div style={{ padding: "10px 14px", background: "#faf8f3", borderRadius: 3, marginBottom: 6, border: "1px solid #c9c3b2" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <span style={{ color: "#e6edf3", fontWeight: 600, fontSize: 14 }}>{zone.name}</span>
+          <span style={{ color: "#1a1a1a", fontWeight: 600, fontSize: 14 }}>{zone.name}</span>
           <Badge color="gray">{zone.cps.length} CPs</Badge>
           <CollapsibleCPs cps={zone.cps} color="blue" />
         </div>
@@ -312,7 +357,7 @@ function ZoneCard({ zone, zones, onRemove, onUpdate }) {
             <Btn small onClick={addCps}>Agregar</Btn>
           </div>
           {error && (
-            <p style={{ color: "#f87171", fontSize: 12, margin: "6px 0 0 0" }}>⚠ {error}</p>
+            <p style={{ color: "#b91c1c", fontSize: 12, margin: "6px 0 0 0" }}>⚠ {error}</p>
           )}
         </div>
       )}
@@ -430,20 +475,20 @@ function ZonesPanel({ zones, setZones }) {
 
   return (
     <Card title="Zonas de envío" icon="🗺️" accent="#60a5fa">
-      <p style={{ color: "#8b949e", fontSize: 13, margin: "0 0 16px 0" }}>
+      <p style={{ color: "#555555", fontSize: 13, margin: "0 0 16px 0" }}>
         Agrupaciones de CPs para el resumen. Cada CP solo puede pertenecer a una zona.
       </p>
 
       {/* Existing duplicates warning */}
       {showExistingDupes && existingDupes.length > 0 && (
-        <div style={{ padding: 14, background: "#3b2a1a", border: "1px solid #5a3a1a", borderRadius: 8, marginBottom: 12 }}>
-          <p style={{ color: "#fb923c", fontSize: 13, fontWeight: 700, margin: "0 0 10px 0" }}>
+        <div style={{ padding: 14, background: "#fdf3e3", border: "1px solid #e3c893", borderRadius: 3, marginBottom: 12 }}>
+          <p style={{ color: "#b45309", fontSize: 13, fontWeight: 700, margin: "0 0 10px 0" }}>
             ⚠ Se encontraron CPs repetidos entre zonas. Elegí dónde querés que quede cada uno:
           </p>
           {existingDupes.map((d) => (
             <div key={d.cp} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
               <Badge color="orange">{d.cp}</Badge>
-              <span style={{ color: "#8b949e", fontSize: 12 }}>está en:</span>
+              <span style={{ color: "#555555", fontSize: 12 }}>está en:</span>
               {d.zones.map((zName) => (
                 <Btn key={zName} small variant="secondary" onClick={() => resolveExistingDupe(d.cp, zName)}>
                   Dejar en {zName}
@@ -463,21 +508,21 @@ function ZonesPanel({ zones, setZones }) {
 
       {/* Conflict resolution for new zone */}
       {conflicts && (
-        <div style={{ padding: 14, background: "#1a2942", border: "1px solid #2a4a6b", borderRadius: 8, marginBottom: 12 }}>
-          <p style={{ color: "#60a5fa", fontSize: 13, fontWeight: 700, margin: "0 0 10px 0" }}>
+        <div style={{ padding: 14, background: "#e7eef5", border: "1px solid #c2cfde", borderRadius: 3, marginBottom: 12 }}>
+          <p style={{ color: "#1e3a5f", fontSize: 13, fontWeight: 700, margin: "0 0 10px 0" }}>
             Algunos CPs de "{conflicts.name}" ya existen en otras zonas. ¿Dónde los querés dejar?
           </p>
           {conflicts.duplicates.map((d) => (
             <div key={d.cp} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
               <Badge color="blue">{d.cp}</Badge>
-              <span style={{ color: "#8b949e", fontSize: 12 }}>existe en {d.zoneName}:</span>
+              <span style={{ color: "#555555", fontSize: 12 }}>existe en {d.zoneName}:</span>
               <button
                 onClick={() => setDupeSelections((prev) => ({ ...prev, [d.cp]: "new" }))}
                 style={{
-                  padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer",
-                  background: dupeSelections[d.cp] === "new" ? "#238636" : "#21262d",
-                  color: dupeSelections[d.cp] === "new" ? "#fff" : "#8b949e",
-                  border: `1px solid ${dupeSelections[d.cp] === "new" ? "#238636" : "#30363d"}`,
+                  padding: "3px 10px", borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: "pointer",
+                  background: dupeSelections[d.cp] === "new" ? "#ea580c" : "#ffffff",
+                  color: dupeSelections[d.cp] === "new" ? "#fff" : "#555555",
+                  border: `1px solid ${dupeSelections[d.cp] === "new" ? "#ea580c" : "#c9c3b2"}`,
                 }}
               >
                 Mover a {conflicts.name}
@@ -485,10 +530,10 @@ function ZonesPanel({ zones, setZones }) {
               <button
                 onClick={() => setDupeSelections((prev) => ({ ...prev, [d.cp]: d.zoneId }))}
                 style={{
-                  padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer",
-                  background: dupeSelections[d.cp] !== "new" ? "#238636" : "#21262d",
-                  color: dupeSelections[d.cp] !== "new" ? "#fff" : "#8b949e",
-                  border: `1px solid ${dupeSelections[d.cp] !== "new" ? "#238636" : "#30363d"}`,
+                  padding: "3px 10px", borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: "pointer",
+                  background: dupeSelections[d.cp] !== "new" ? "#ea580c" : "#ffffff",
+                  color: dupeSelections[d.cp] !== "new" ? "#fff" : "#555555",
+                  border: `1px solid ${dupeSelections[d.cp] !== "new" ? "#ea580c" : "#c9c3b2"}`,
                 }}
               >
                 Dejar en {d.zoneName}
@@ -502,7 +547,7 @@ function ZonesPanel({ zones, setZones }) {
         </div>
       )}
 
-      {zones.length === 0 && <p style={{ color: "#484f58", fontSize: 13, textAlign: "center", padding: 20 }}>No hay zonas configuradas</p>}
+      {zones.length === 0 && <p style={{ color: "#8a8a7e", fontSize: 13, textAlign: "center", padding: 20 }}>No hay zonas configuradas</p>}
       {zones.map((z) => (
         <ZoneCard key={z.id} zone={z} zones={zones} onRemove={() => remove(z.id)} onUpdate={(updated) => setZones((prev) => prev.map((zz) => zz.id === updated.id ? updated : zz))} />
       ))}
@@ -559,10 +604,10 @@ function CarrierCard({ carrier, onRemove, onUpdate, zones }) {
   const hasZoneLimits = Object.keys(zoneLimits).length > 0;
 
   return (
-    <div style={{ padding: "12px 14px", background: "#0d1117", borderRadius: 8, marginBottom: 6, border: "1px solid #21262d" }}>
+    <div style={{ padding: "12px 14px", background: "#faf8f3", borderRadius: 3, marginBottom: 6, border: "1px solid #c9c3b2" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ color: "#e6edf3", fontWeight: 600, fontSize: 14 }}>{carrier.name}</span>
+          <span style={{ color: "#1a1a1a", fontWeight: 600, fontSize: 14 }}>{carrier.name}</span>
           {editingTotalLimit ? (
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <Input
@@ -582,7 +627,7 @@ function CarrierCard({ carrier, onRemove, onUpdate, zones }) {
           ) : (
             <button
               onClick={() => { setTotalLimitInput(carrier.limit ? String(carrier.limit) : ""); setEditingTotalLimit(true); }}
-              style={{ background: "#3b2a1a", color: "#fb923c", border: "1px solid #5a3a1a", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+              style={{ background: "#fdf3e3", color: "#b45309", border: "1px solid #e3c893", borderRadius: 3, padding: "2px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
             >
               {carrier.limit ? `Tope total: ${carrier.limit}` : "Tope total: ∞"}
             </button>
@@ -590,10 +635,10 @@ function CarrierCard({ carrier, onRemove, onUpdate, zones }) {
           <button
             onClick={togglePriority}
             style={{
-              background: prio === "COMERCIAL" ? "#1a3328" : "#1a2942",
-              color: prio === "COMERCIAL" ? "#4ade80" : "#60a5fa",
-              border: `1px solid ${prio === "COMERCIAL" ? "#2a5a40" : "#2a4a6b"}`,
-              borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer",
+              background: prio === "COMERCIAL" ? "#e8f3ec" : "#e7eef5",
+              color: prio === "COMERCIAL" ? "#15803d" : "#1e3a5f",
+              border: `1px solid ${prio === "COMERCIAL" ? "#b5d4bf" : "#c2cfde"}`,
+              borderRadius: 3, padding: "2px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer",
             }}
           >
             Prioriza: {prio}
@@ -605,10 +650,10 @@ function CarrierCard({ carrier, onRemove, onUpdate, zones }) {
       </div>
 
       {/* CPs prioritarios - editable */}
-      <div style={{ marginTop: 8, padding: "8px 10px", background: "#161b22", borderRadius: 6, border: "1px solid #21262d" }}>
+      <div style={{ marginTop: 8, padding: "8px 10px", background: "#ffffff", borderRadius: 3, border: "1px solid #c9c3b2" }}>
         {editingPrioCps ? (
           <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-            <span style={{ color: "#c084fc", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>CPs prioritarios:</span>
+            <span style={{ color: "#6b21a8", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>CPs prioritarios:</span>
             <Input
               value={prioCpsInput}
               onChange={setPrioCpsInput}
@@ -621,11 +666,11 @@ function CarrierCard({ carrier, onRemove, onUpdate, zones }) {
         ) : (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", flex: 1 }}>
-              <span style={{ color: "#c084fc", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>CPs prioritarios:</span>
+              <span style={{ color: "#6b21a8", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>CPs prioritarios:</span>
               {hasPrioCps ? (
                 <CollapsibleCPs cps={carrier.priorityCps} color="purple" previewCount={5} />
               ) : (
-                <span style={{ color: "#484f58", fontSize: 12 }}>Sin configurar</span>
+                <span style={{ color: "#8a8a7e", fontSize: 12 }}>Sin configurar</span>
               )}
             </div>
             <div style={{ display: "flex", gap: 4 }}>
@@ -640,13 +685,13 @@ function CarrierCard({ carrier, onRemove, onUpdate, zones }) {
 
       {/* Topes por zona - editable */}
       {zones.length > 0 && (
-        <div style={{ marginTop: 6, padding: "8px 10px", background: "#161b22", borderRadius: 6, border: "1px solid #21262d" }}>
+        <div style={{ marginTop: 6, padding: "8px 10px", background: "#ffffff", borderRadius: 3, border: "1px solid #c9c3b2" }}>
           {editingZoneLimits ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <span style={{ color: "#fb923c", fontSize: 12, fontWeight: 600 }}>Topes por zona:</span>
+              <span style={{ color: "#b45309", fontSize: 12, fontWeight: 600 }}>Topes por zona:</span>
               {zones.map((z) => (
                 <div key={z.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ color: "#c9d1d9", fontSize: 12, minWidth: 80 }}>{z.name}:</span>
+                  <span style={{ color: "#2a2a2a", fontSize: 12, minWidth: 80 }}>{z.name}:</span>
                   <Input
                     value={zoneLimitsInput[z.id] || ""}
                     onChange={(val) => setZoneLimitsInput((prev) => ({ ...prev, [z.id]: val }))}
@@ -664,13 +709,13 @@ function CarrierCard({ carrier, onRemove, onUpdate, zones }) {
           ) : (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", flex: 1 }}>
-                <span style={{ color: "#fb923c", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>Topes por zona:</span>
+                <span style={{ color: "#b45309", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>Topes por zona:</span>
                 {hasZoneLimits ? (
                   zones.filter((z) => zoneLimits[z.id]).map((z) => (
                     <Badge key={z.id} color="orange">{z.name}: {zoneLimits[z.id]}</Badge>
                   ))
                 ) : (
-                  <span style={{ color: "#484f58", fontSize: 12 }}>Sin configurar</span>
+                  <span style={{ color: "#8a8a7e", fontSize: 12 }}>Sin configurar</span>
                 )}
               </div>
               <Btn small variant="secondary" onClick={startEditZoneLimits}>
@@ -708,7 +753,7 @@ function CarriersPanel({ carriers, setCarriers, zones }) {
 
   return (
     <Card title="Transportistas" icon="🚛" accent="#4ade80">
-      <p style={{ color: "#8b949e", fontSize: 13, margin: "0 0 16px 0" }}>
+      <p style={{ color: "#555555", fontSize: 13, margin: "0 0 16px 0" }}>
         Cada transportista tiene CPs asignados, un tope opcional y prioridad por tipo de envío. Los CPs prioritarios se configuran en cada tarjeta.
       </p>
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
@@ -716,14 +761,14 @@ function CarriersPanel({ carriers, setCarriers, zones }) {
         <Input value={cps} onChange={setCps} placeholder="CPs asignados: 1000, 1001, 1036" style={{ flex: "2 1 220px" }} />
         <Input value={limit} onChange={setLimit} placeholder="Tope (vacío=sin tope)" type="number" style={{ flex: "0 1 130px" }} />
         <div style={{ display: "flex", alignItems: "center", gap: 6, flex: "0 0 auto" }}>
-          <span style={{ color: "#8b949e", fontSize: 12 }}>Priorizar:</span>
+          <span style={{ color: "#555555", fontSize: 12 }}>Priorizar:</span>
           <button
             onClick={() => setPriority(priority === "COMERCIAL" ? "RESIDENCIAL" : "COMERCIAL")}
             style={{
-              background: priority === "COMERCIAL" ? "#1a3328" : "#1a2942",
-              color: priority === "COMERCIAL" ? "#4ade80" : "#60a5fa",
-              border: `1px solid ${priority === "COMERCIAL" ? "#2a5a40" : "#2a4a6b"}`,
-              borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer",
+              background: priority === "COMERCIAL" ? "#e8f3ec" : "#e7eef5",
+              color: priority === "COMERCIAL" ? "#15803d" : "#1e3a5f",
+              border: `1px solid ${priority === "COMERCIAL" ? "#b5d4bf" : "#c2cfde"}`,
+              borderRadius: 3, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer",
             }}
           >
             {priority}
@@ -731,7 +776,7 @@ function CarriersPanel({ carriers, setCarriers, zones }) {
         </div>
         <Btn onClick={add} variant="primary" disabled={!name.trim() || !cps.trim()}>+ Agregar</Btn>
       </div>
-      {carriers.length === 0 && <p style={{ color: "#484f58", fontSize: 13, textAlign: "center", padding: 20 }}>No hay transportistas configurados</p>}
+      {carriers.length === 0 && <p style={{ color: "#8a8a7e", fontSize: 13, textAlign: "center", padding: 20 }}>No hay transportistas configurados</p>}
       {carriers.map((c) => (
         <CarrierCard key={c.id} carrier={c} onRemove={() => remove(c.id)} onUpdate={update} zones={zones} />
       ))}
@@ -824,21 +869,22 @@ function FileUpload({ onParsed, clients, setClients }) {
         onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setDragging(false); }}
         onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragging(false); addFiles(e.dataTransfer.files); }}
         style={{
-          border: `2px dashed ${dragging ? "#238636" : "#30363d"}`, borderRadius: 12, padding: 30,
+          border: `2px dashed ${dragging ? "#ea580c" : "#a8a08a"}`, borderRadius: 4, padding: 30,
           textAlign: "center", transition: "all .2s",
-          background: dragging ? "#0d1117" : "#161b22",
+          background: dragging ? "#fef3e7" : "#ffffff",
         }}
       >
-        <div style={{ fontSize: 40, marginBottom: 8 }}>📦</div>
-        <p style={{ color: "#e6edf3", fontSize: 15, fontWeight: 600, margin: "0 0 4px 0" }}>
+        <div style={{ fontSize: 36, marginBottom: 8 }}>📦</div>
+        <p style={{ color: "#1a1a1a", fontSize: 14, fontWeight: 700, margin: "0 0 4px 0", textTransform: "uppercase", letterSpacing: "0.04em" }}>
           Arrastrá tus archivos TXT acá
         </p>
-        <p style={{ color: "#8b949e", fontSize: 13, margin: "0 0 14px 0" }}>
+        <p style={{ color: "#555555", fontSize: 12, margin: "0 0 14px 0" }}>
           Podés cargar varios archivos a la vez
         </p>
         <label style={{
-          display: "inline-block", background: "#238636", color: "#fff", padding: "10px 24px",
-          borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer",
+          display: "inline-block", background: "#ea580c", color: "#fff", padding: "9px 20px",
+          borderRadius: 3, fontSize: 12, fontWeight: 700, cursor: "pointer",
+          textTransform: "uppercase", letterSpacing: "0.04em",
         }}>
           Seleccionar archivos .txt
           <input
@@ -856,25 +902,25 @@ function FileUpload({ onParsed, clients, setClients }) {
       {files.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ color: "#e6edf3", fontSize: 14, fontWeight: 600 }}>
+            <span style={{ color: "#1a1a1a", fontSize: 14, fontWeight: 600 }}>
               {files.length} archivo{files.length !== 1 ? "s" : ""} cargado{files.length !== 1 ? "s" : ""}
             </span>
             <Btn small variant="ghost" onClick={() => setFiles([])}>Limpiar todo</Btn>
           </div>
           {files.map((f) => (
-            <div key={f.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 12px", background: "#0d1117", borderRadius: 6, border: "1px solid #21262d" }}>
+            <div key={f.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 12px", background: "#faf8f3", borderRadius: 3, border: "1px solid #c9c3b2" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ color: "#8b949e", fontSize: 14 }}>📄</span>
-                <span style={{ color: "#c9d1d9", fontSize: 13 }}>{f.name}</span>
-                <span style={{ color: "#484f58", fontSize: 11 }}>({(f.size / 1024).toFixed(1)} KB)</span>
+                <span style={{ color: "#555555", fontSize: 14 }}>📄</span>
+                <span style={{ color: "#2a2a2a", fontSize: 13 }}>{f.name}</span>
+                <span style={{ color: "#8a8a7e", fontSize: 11 }}>({(f.size / 1024).toFixed(1)} KB)</span>
               </div>
               <Btn variant="ghost" small onClick={() => removeFile(f.name)}>✕</Btn>
             </div>
           ))}
 
           {/* Client selector */}
-          <div style={{ padding: "10px 12px", background: "#0d1117", borderRadius: 8, border: "1px solid #21262d", marginTop: 4 }}>
-            <label style={{ display: "block", color: "#8b949e", fontSize: 11, fontWeight: 600, marginBottom: 6 }}>
+          <div style={{ padding: "10px 12px", background: "#faf8f3", borderRadius: 3, border: "1px solid #c9c3b2", marginTop: 4 }}>
+            <label style={{ display: "block", color: "#555555", fontSize: 11, fontWeight: 600, marginBottom: 6 }}>
               CLIENTE (opcional)
             </label>
             <div style={{ position: "relative" }}>
@@ -884,22 +930,22 @@ function FileUpload({ onParsed, clients, setClients }) {
                 onChange={(e) => setClientName(e.target.value)}
                 onFocus={() => setShowSuggestions(true)}
                 placeholder="Nombre del cliente, ej: Drink Suma, Yopi..."
-                style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: 8, padding: "8px 12px", color: "#e6edf3", fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box" }}
+                style={{ background: "#faf8f3", border: "1px solid #c9c3b2", borderRadius: 3, padding: "8px 12px", color: "#1a1a1a", fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box" }}
               />
               {showSuggestions && filteredClients.length > 0 && (
                 <>
                   <div onClick={() => setShowSuggestions(false)} style={{ position: "fixed", inset: 0, zIndex: 10 }} />
                   <div style={{
                     position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 11,
-                    background: "#161b22", border: "1px solid #30363d", borderRadius: 6,
+                    background: "#ffffff", border: "1px solid #c9c3b2", borderRadius: 3,
                     maxHeight: 180, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
                   }}>
                     {filteredClients.map((c) => (
                       <button
                         key={c}
                         onClick={() => { setClientName(c); setShowSuggestions(false); }}
-                        style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 12px", background: "none", border: "none", color: "#c9d1d9", fontSize: 13, cursor: "pointer", borderBottom: "1px solid #21262d" }}
-                        onMouseEnter={(e) => e.currentTarget.style.background = "#21262d"}
+                        style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 12px", background: "none", border: "none", color: "#2a2a2a", fontSize: 13, cursor: "pointer", borderBottom: "1px solid #e5e1d5" }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = "#f0ece2"}
                         onMouseLeave={(e) => e.currentTarget.style.background = "none"}
                       >
                         {c}
@@ -911,12 +957,12 @@ function FileUpload({ onParsed, clients, setClients }) {
             </div>
             {clients.length > 0 && (
               <div style={{ marginTop: 6, display: "flex", gap: 4, flexWrap: "wrap" }}>
-                <span style={{ color: "#484f58", fontSize: 11 }}>Recientes:</span>
+                <span style={{ color: "#8a8a7e", fontSize: 11 }}>Recientes:</span>
                 {clients.slice(0, 8).map((c) => (
                   <button
                     key={c}
                     onClick={() => setClientName(c)}
-                    style={{ background: clientName === c ? "#1a3328" : "#161b22", border: `1px solid ${clientName === c ? "#2a5a40" : "#21262d"}`, color: clientName === c ? "#4ade80" : "#8b949e", borderRadius: 12, padding: "2px 8px", fontSize: 11, cursor: "pointer" }}
+                    style={{ background: clientName === c ? "#e8f3ec" : "#ffffff", border: `1px solid ${clientName === c ? "#b5d4bf" : "#c9c3b2"}`, color: clientName === c ? "#15803d" : "#555555", borderRadius: 4, padding: "2px 8px", fontSize: 11, cursor: "pointer" }}
                   >
                     {c}
                   </button>
@@ -924,7 +970,7 @@ function FileUpload({ onParsed, clients, setClients }) {
               </div>
             )}
             {!clientName.trim() && (
-              <p style={{ color: "#fb923c", fontSize: 11, margin: "6px 0 0 0" }}>
+              <p style={{ color: "#b45309", fontSize: 11, margin: "6px 0 0 0" }}>
                 ⚠ Sin cliente → se guardará como "Sin asignar"
               </p>
             )}
@@ -933,7 +979,7 @@ function FileUpload({ onParsed, clients, setClients }) {
           <Btn
             onClick={processAll}
             disabled={loading}
-            style={{ width: "100%", padding: "14px 20px", fontSize: 15, justifyContent: "center", borderRadius: 10, marginTop: 4 }}
+            style={{ width: "100%", padding: "14px 20px", fontSize: 15, justifyContent: "center", borderRadius: 4, marginTop: 4 }}
           >
             {loading ? "Procesando..." : "🚀 COMENZAR"}
           </Btn>
@@ -941,7 +987,7 @@ function FileUpload({ onParsed, clients, setClients }) {
       )}
 
       {error && (
-        <div style={{ padding: "10px 14px", background: "#3b1a1a", border: "1px solid #5a2a2a", borderRadius: 8, color: "#f87171", fontSize: 13 }}>
+        <div style={{ padding: "10px 14px", background: "#fbe9e9", border: "1px solid #e0b5b5", borderRadius: 3, color: "#b91c1c", fontSize: 13 }}>
           ⚠ {error}
         </div>
       )}
@@ -957,12 +1003,12 @@ function EnvioChip({ shipment, currentLocation, carriers, isOverride, onMove, on
 
   return (
     <div style={{
-      fontSize: 11, color: "#8b949e", background: isOverride ? "#2a1a42" : "#161b22",
-      padding: "4px 8px", borderRadius: 4, border: `1px solid ${isOverride ? "#3a2a5a" : "#21262d"}`,
+      fontSize: 11, color: "#555555", background: isOverride ? "#f1e7f7" : "#ffffff",
+      padding: "4px 8px", borderRadius: 4, border: `1px solid ${isOverride ? "#d5b9df" : "#c9c3b2"}`,
       display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
-        {isOverride && <span style={{ color: "#c084fc", fontSize: 10 }} title="Movido manualmente">✎</span>}
+        {isOverride && <span style={{ color: "#6b21a8", fontSize: 10 }} title="Movido manualmente">✎</span>}
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
       </div>
       {shipment.envio && (
@@ -970,7 +1016,7 @@ function EnvioChip({ shipment, currentLocation, carriers, isOverride, onMove, on
           {isOverride && (
             <button
               onClick={onClearOverride}
-              style={{ background: "none", border: "1px solid #3a2a5a", borderRadius: 3, padding: "1px 6px", fontSize: 10, color: "#c084fc", cursor: "pointer" }}
+              style={{ background: "none", border: "1px solid #d5b9df", borderRadius: 3, padding: "1px 6px", fontSize: 10, color: "#6b21a8", cursor: "pointer" }}
               title="Deshacer movimiento manual"
             >
               ↺
@@ -978,7 +1024,7 @@ function EnvioChip({ shipment, currentLocation, carriers, isOverride, onMove, on
           )}
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            style={{ background: "none", border: "1px solid #30363d", borderRadius: 3, padding: "1px 6px", fontSize: 10, color: "#8b949e", cursor: "pointer" }}
+            style={{ background: "none", border: "1px solid #c9c3b2", borderRadius: 3, padding: "1px 6px", fontSize: 10, color: "#555555", cursor: "pointer" }}
           >
             Mover ▾
           </button>
@@ -987,15 +1033,15 @@ function EnvioChip({ shipment, currentLocation, carriers, isOverride, onMove, on
               <div onClick={() => setMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 10 }} />
               <div style={{
                 position: "absolute", top: "100%", right: 0, marginTop: 4, zIndex: 11,
-                background: "#161b22", border: "1px solid #30363d", borderRadius: 6, padding: 4,
+                background: "#ffffff", border: "1px solid #c9c3b2", borderRadius: 3, padding: 4,
                 minWidth: 140, boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
               }}>
                 {otherCarriers.map((c) => (
                   <button
                     key={c.id}
                     onClick={() => { onMove(c.id); setMenuOpen(false); }}
-                    style={{ display: "block", width: "100%", textAlign: "left", padding: "5px 8px", background: "none", border: "none", color: "#c9d1d9", fontSize: 11, cursor: "pointer", borderRadius: 3 }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = "#21262d"}
+                    style={{ display: "block", width: "100%", textAlign: "left", padding: "5px 8px", background: "none", border: "none", color: "#2a2a2a", fontSize: 11, cursor: "pointer", borderRadius: 3 }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = "#f0ece2"}
                     onMouseLeave={(e) => e.currentTarget.style.background = "none"}
                   >
                     → {c.name}
@@ -1004,8 +1050,8 @@ function EnvioChip({ shipment, currentLocation, carriers, isOverride, onMove, on
                 {currentLocation !== "EXTRA" && (
                   <button
                     onClick={() => { onMove("EXTRA"); setMenuOpen(false); }}
-                    style={{ display: "block", width: "100%", textAlign: "left", padding: "5px 8px", background: "none", border: "none", color: "#f87171", fontSize: 11, cursor: "pointer", borderRadius: 3 }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = "#21262d"}
+                    style={{ display: "block", width: "100%", textAlign: "left", padding: "5px 8px", background: "none", border: "none", color: "#b91c1c", fontSize: 11, cursor: "pointer", borderRadius: 3 }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = "#f0ece2"}
                     onMouseLeave={(e) => e.currentTarget.style.background = "none"}
                   >
                     → EXTRA
@@ -1038,25 +1084,25 @@ function UnassignedCPs({ noZoneShipments, zones, setZones }) {
   };
 
   return (
-    <div style={{ padding: "10px 14px", background: "#0d1117", borderRadius: 8, border: "1px solid #3b1a1a" }}>
+    <div style={{ padding: "10px 14px", background: "#faf8f3", borderRadius: 3, border: "1px solid #e0b5b5" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <span style={{ color: "#f87171", fontWeight: 600, fontSize: 14 }}>Sin zona asignada</span>
+        <span style={{ color: "#b91c1c", fontWeight: 600, fontSize: 14 }}>Sin zona asignada</span>
         <Badge color="red">{noZoneShipments.length} envío{noZoneShipments.length !== 1 ? "s" : ""}</Badge>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         {cpList.map((cp) => (
-          <div key={cp} style={{ padding: "6px 10px", background: "#161b22", borderRadius: 6, border: "1px solid #21262d" }}>
+          <div key={cp} style={{ padding: "6px 10px", background: "#ffffff", borderRadius: 3, border: "1px solid #c9c3b2" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <Badge color="red">{cp}</Badge>
-                <span style={{ color: "#8b949e", fontSize: 12 }}>{byCP[cp].length} envío{byCP[cp].length !== 1 ? "s" : ""}</span>
+                <span style={{ color: "#555555", fontSize: 12 }}>{byCP[cp].length} envío{byCP[cp].length !== 1 ? "s" : ""}</span>
                 {byCP[cp][0].localidad && (
-                  <span style={{ color: "#484f58", fontSize: 11 }}>({byCP[cp][0].localidad})</span>
+                  <span style={{ color: "#8a8a7e", fontSize: 11 }}>({byCP[cp][0].localidad})</span>
                 )}
               </div>
               {assigningCp === cp ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
-                  <span style={{ color: "#8b949e", fontSize: 11 }}>Asignar a:</span>
+                  <span style={{ color: "#555555", fontSize: 11 }}>Asignar a:</span>
                   {zones.map((z) => (
                     <Btn key={z.id} small variant="secondary" onClick={() => assignToZone(cp, z.id)}>
                       {z.name}
@@ -1519,12 +1565,12 @@ ${carriers.length > 0 ? `
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Client banner */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "#1a2942", border: "1px solid #2a4a6b", borderRadius: 10, flexWrap: "wrap", gap: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "#e7eef5", border: "1px solid #c2cfde", borderRadius: 4, flexWrap: "wrap", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 18 }}>🏢</span>
           <div>
-            <div style={{ color: "#8b949e", fontSize: 11, fontWeight: 600 }}>CLIENTE</div>
-            <div style={{ color: "#60a5fa", fontSize: 15, fontWeight: 700 }}>{currentClient || "Sin asignar"}</div>
+            <div style={{ color: "#555555", fontSize: 11, fontWeight: 600 }}>CLIENTE</div>
+            <div style={{ color: "#1e3a5f", fontSize: 15, fontWeight: 700 }}>{currentClient || "Sin asignar"}</div>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -1545,20 +1591,20 @@ ${carriers.length > 0 ? `
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
         <Card accent="#60a5fa">
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 32, fontWeight: 800, color: "#60a5fa" }}>{flex.length}</div>
-            <div style={{ fontSize: 13, color: "#8b949e", fontWeight: 600 }}>Envíos FLEX</div>
+            <div style={{ fontSize: 32, fontWeight: 800, color: "#1e3a5f" }}>{flex.length}</div>
+            <div style={{ fontSize: 13, color: "#555555", fontWeight: 600 }}>Envíos FLEX</div>
           </div>
         </Card>
         <Card accent="#fb923c">
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 32, fontWeight: 800, color: "#fb923c" }}>{colecta.length}</div>
-            <div style={{ fontSize: 13, color: "#8b949e", fontWeight: 600 }}>Órdenes COLECTA</div>
+            <div style={{ fontSize: 32, fontWeight: 800, color: "#b45309" }}>{colecta.length}</div>
+            <div style={{ fontSize: 13, color: "#555555", fontWeight: 600 }}>Órdenes COLECTA</div>
           </div>
         </Card>
         <Card accent="#c084fc">
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 32, fontWeight: 800, color: "#c084fc" }}>{allItems.reduce((s, i) => s + i.qty, 0)}</div>
-            <div style={{ fontSize: 13, color: "#8b949e", fontWeight: 600 }}>Unidades totales</div>
+            <div style={{ fontSize: 32, fontWeight: 800, color: "#6b21a8" }}>{allItems.reduce((s, i) => s + i.qty, 0)}</div>
+            <div style={{ fontSize: 13, color: "#555555", fontWeight: 600 }}>Unidades totales</div>
           </div>
         </Card>
       </div>
@@ -1566,12 +1612,12 @@ ${carriers.length > 0 ? `
       {/* Flex zone breakdown */}
       <Card title="Envíos FLEX por zona" icon="📍" accent="#60a5fa">
         {zones.length === 0 ? (
-          <p style={{ color: "#484f58", fontSize: 13 }}>Configurá zonas en la pestaña de configuración para ver el desglose</p>
+          <p style={{ color: "#8a8a7e", fontSize: 13 }}>Configurá zonas en la pestaña de configuración para ver el desglose</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {zoneBreakdown.map((zb) => (
-              <div key={zb.zone.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", background: "#0d1117", borderRadius: 8, border: "1px solid #21262d" }}>
-                <span style={{ color: "#e6edf3", fontWeight: 600, fontSize: 14 }}>{zb.zone.name}</span>
+              <div key={zb.zone.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", background: "#faf8f3", borderRadius: 3, border: "1px solid #c9c3b2" }}>
+                <span style={{ color: "#1a1a1a", fontWeight: 600, fontSize: 14 }}>{zb.zone.name}</span>
                 <Badge color={zb.count > 0 ? "blue" : "gray"}>{zb.count} envío{zb.count !== 1 ? "s" : ""}</Badge>
               </div>
             ))}
@@ -1586,34 +1632,34 @@ ${carriers.length > 0 ? `
       <Card title="SKUs totales" icon="📦" accent="#c084fc">
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           {groupSkus(allItems).map(([sku, qty]) => (
-            <div key={sku} style={{ display: "flex", justifyContent: "space-between", padding: "6px 12px", background: "#0d1117", borderRadius: 6 }}>
-              <span style={{ color: "#e6edf3", fontSize: 13, fontFamily: "monospace" }}>{sku}</span>
+            <div key={sku} style={{ display: "flex", justifyContent: "space-between", padding: "6px 12px", background: "#faf8f3", borderRadius: 3 }}>
+              <span style={{ color: "#1a1a1a", fontSize: 13, fontFamily: "monospace" }}>{sku}</span>
               <Badge color="purple">×{qty}</Badge>
             </div>
           ))}
-          {allItems.length === 0 && <p style={{ color: "#484f58", fontSize: 13 }}>—</p>}
+          {allItems.length === 0 && <p style={{ color: "#8a8a7e", fontSize: 13 }}>—</p>}
         </div>
       </Card>
 
       {/* Carrier assignment */}
       <Card title="Asignación por transportista" icon="🚛" accent="#4ade80">
         {Object.keys(manualOverrides).length > 0 && (
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "#2a1a42", border: "1px solid #3a2a5a", borderRadius: 6, marginBottom: 10 }}>
-            <span style={{ color: "#c084fc", fontSize: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "#f1e7f7", border: "1px solid #d5b9df", borderRadius: 3, marginBottom: 10 }}>
+            <span style={{ color: "#6b21a8", fontSize: 12 }}>
               ✎ {Object.keys(manualOverrides).length} envío{Object.keys(manualOverrides).length !== 1 ? "s" : ""} movido{Object.keys(manualOverrides).length !== 1 ? "s" : ""} manualmente
             </span>
             <Btn small variant="ghost" onClick={() => setManualOverrides({})}>Deshacer todo</Btn>
           </div>
         )}
         {carriers.length === 0 ? (
-          <p style={{ color: "#484f58", fontSize: 13 }}>Configurá transportistas para ver la asignación y generar TXTs</p>
+          <p style={{ color: "#8a8a7e", fontSize: 13 }}>Configurá transportistas para ver la asignación y generar TXTs</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {carrierAssignments.map((ca) => (
-              <div key={ca.carrier.id} style={{ padding: "12px 14px", background: "#0d1117", borderRadius: 8, border: "1px solid #21262d" }}>
+              <div key={ca.carrier.id} style={{ padding: "12px 14px", background: "#faf8f3", borderRadius: 3, border: "1px solid #c9c3b2" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: ca.shipments.length ? 8 : 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ color: "#e6edf3", fontWeight: 700, fontSize: 14 }}>{ca.carrier.name}</span>
+                    <span style={{ color: "#1a1a1a", fontWeight: 700, fontSize: 14 }}>{ca.carrier.name}</span>
                     {ca.carrier.limit && <Badge color="orange">Tope: {ca.carrier.limit}</Badge>}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1646,16 +1692,16 @@ ${carriers.length > 0 ? `
                   </div>
                 )}
                 {ca.overflow.length > 0 && (
-                  <p style={{ color: "#fb923c", fontSize: 12, margin: "6px 0 0 0" }}>
+                  <p style={{ color: "#b45309", fontSize: 12, margin: "6px 0 0 0" }}>
                     ⚠ {ca.overflow.length} envío(s) exceden el tope → van a EXTRA
                   </p>
                 )}
               </div>
             ))}
             {/* Extra */}
-            <div style={{ padding: "12px 14px", background: "#0d1117", borderRadius: 8, border: "1px solid #3b1a1a" }}>
+            <div style={{ padding: "12px 14px", background: "#faf8f3", borderRadius: 3, border: "1px solid #e0b5b5" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: extra.length ? 8 : 0 }}>
-                <span style={{ color: "#f87171", fontWeight: 700, fontSize: 14 }}>EXTRA (sin transportista)</span>
+                <span style={{ color: "#b91c1c", fontWeight: 700, fontSize: 14 }}>EXTRA (sin transportista)</span>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <Badge color="red">{extra.length} envío{extra.length !== 1 ? "s" : ""}</Badge>
                   {extra.length > 0 && (
@@ -1694,11 +1740,11 @@ ${carriers.length > 0 ? `
       {(carriers.length > 0 || zones.length > 0) && (flex.length > 0 || colecta.length > 0) && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {carriers.length > 0 && flex.length > 0 && (
-            <Btn onClick={handleGenerateAll} style={{ flex: "1 1 200px", padding: "14px 20px", fontSize: 15, justifyContent: "center", borderRadius: 10 }}>
+            <Btn onClick={handleGenerateAll} style={{ flex: "1 1 200px", padding: "14px 20px", fontSize: 15, justifyContent: "center", borderRadius: 4 }}>
               ⬇ Generar todos los TXT
             </Btn>
           )}
-          <Btn onClick={printGeneralReport} variant="secondary" style={{ flex: "1 1 200px", padding: "14px 20px", fontSize: 15, justifyContent: "center", borderRadius: 10 }}>
+          <Btn onClick={printGeneralReport} variant="secondary" style={{ flex: "1 1 200px", padding: "14px 20px", fontSize: 15, justifyContent: "center", borderRadius: 4 }}>
             🖨️ Reporte general (PDF)
           </Btn>
         </div>
@@ -1725,26 +1771,26 @@ function LabelPreview({ shipment, carrier, onClose }) {
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: "#161b22", border: "1px solid #30363d", borderRadius: 12,
+          background: "#ffffff", border: "1px solid #c9c3b2", borderRadius: 4,
           padding: 24, maxWidth: 520, width: "100%", maxHeight: "90vh", overflow: "auto",
           boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
         }}
       >
         {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, paddingBottom: 12, borderBottom: "1px solid #30363d" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, paddingBottom: 12, borderBottom: "1px solid #c9c3b2" }}>
           <div>
-            <h3 style={{ color: "#e6edf3", fontSize: 16, fontWeight: 700, margin: 0 }}>
+            <h3 style={{ color: "#1a1a1a", fontSize: 16, fontWeight: 700, margin: 0 }}>
               {shipment.type === "FLEX" ? "📦 Envío FLEX" : "📋 Orden COLECTA"}
             </h3>
             {shipment.envio && (
-              <p style={{ color: "#8b949e", fontSize: 12, fontFamily: "monospace", margin: "2px 0 0 0" }}>
+              <p style={{ color: "#555555", fontSize: 12, fontFamily: "monospace", margin: "2px 0 0 0" }}>
                 #{shipment.envio}
               </p>
             )}
           </div>
           <button
             onClick={onClose}
-            style={{ background: "none", border: "1px solid #30363d", borderRadius: 6, padding: "4px 10px", color: "#8b949e", cursor: "pointer", fontSize: 14 }}
+            style={{ background: "none", border: "1px solid #c9c3b2", borderRadius: 3, padding: "4px 10px", color: "#555555", cursor: "pointer", fontSize: 14 }}
           >
             ✕
           </button>
@@ -1755,23 +1801,23 @@ function LabelPreview({ shipment, carrier, onClose }) {
           {/* CP + Tipo + Fecha */}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {shipment.cp && (
-              <div style={{ flex: "1 1 auto", padding: "10px 14px", background: "#0d1117", borderRadius: 8, border: "1px solid #21262d", textAlign: "center" }}>
-                <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 2 }}>CÓDIGO POSTAL</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: "#60a5fa" }}>{shipment.cp}</div>
+              <div style={{ flex: "1 1 auto", padding: "10px 14px", background: "#faf8f3", borderRadius: 3, border: "1px solid #c9c3b2", textAlign: "center" }}>
+                <div style={{ fontSize: 11, color: "#555555", marginBottom: 2 }}>CÓDIGO POSTAL</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "#1e3a5f" }}>{shipment.cp}</div>
               </div>
             )}
             {shipment.tipoEnvio && (
-              <div style={{ flex: "1 1 auto", padding: "10px 14px", background: "#0d1117", borderRadius: 8, border: "1px solid #21262d", textAlign: "center" }}>
-                <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 2 }}>TIPO</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: shipment.tipoEnvio === "COMERCIAL" ? "#4ade80" : "#c9d1d9", paddingTop: 4 }}>
+              <div style={{ flex: "1 1 auto", padding: "10px 14px", background: "#faf8f3", borderRadius: 3, border: "1px solid #c9c3b2", textAlign: "center" }}>
+                <div style={{ fontSize: 11, color: "#555555", marginBottom: 2 }}>TIPO</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: shipment.tipoEnvio === "COMERCIAL" ? "#15803d" : "#555555", paddingTop: 4 }}>
                   {shipment.tipoEnvio}
                 </div>
               </div>
             )}
             {shipment.fecha && (
-              <div style={{ flex: "1 1 auto", padding: "10px 14px", background: "#0d1117", borderRadius: 8, border: "1px solid #21262d", textAlign: "center" }}>
-                <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 2 }}>FECHA</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#fb923c", paddingTop: 4 }}>{shipment.fecha}</div>
+              <div style={{ flex: "1 1 auto", padding: "10px 14px", background: "#faf8f3", borderRadius: 3, border: "1px solid #c9c3b2", textAlign: "center" }}>
+                <div style={{ fontSize: 11, color: "#555555", marginBottom: 2 }}>FECHA</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#b45309", paddingTop: 4 }}>{shipment.fecha}</div>
               </div>
             )}
           </div>
@@ -1800,12 +1846,12 @@ function LabelPreview({ shipment, carrier, onClose }) {
           )}
 
           {/* Items */}
-          <div style={{ padding: "10px 14px", background: "#0d1117", borderRadius: 8, border: "1px solid #21262d" }}>
-            <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 6 }}>ITEMS</div>
+          <div style={{ padding: "10px 14px", background: "#faf8f3", borderRadius: 3, border: "1px solid #c9c3b2" }}>
+            <div style={{ fontSize: 11, color: "#555555", marginBottom: 6 }}>ITEMS</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               {shipment.items.map((it, i) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0" }}>
-                  <span style={{ color: "#e6edf3", fontSize: 13, fontFamily: "monospace" }}>{it.sku}</span>
+                  <span style={{ color: "#1a1a1a", fontSize: 13, fontFamily: "monospace" }}>{it.sku}</span>
                   <Badge color="purple">×{it.qty}</Badge>
                 </div>
               ))}
@@ -1813,8 +1859,8 @@ function LabelPreview({ shipment, carrier, onClose }) {
           </div>
 
           {/* Transportista */}
-          <div style={{ padding: "10px 14px", background: "#0d1117", borderRadius: 8, border: "1px solid #21262d", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 11, color: "#8b949e" }}>TRANSPORTISTA</span>
+          <div style={{ padding: "10px 14px", background: "#faf8f3", borderRadius: 3, border: "1px solid #c9c3b2", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 11, color: "#555555" }}>TRANSPORTISTA</span>
             {carrier ? <Badge color="green">{carrier.name}</Badge> : <Badge color="red">EXTRA</Badge>}
           </div>
         </div>
@@ -1825,9 +1871,9 @@ function LabelPreview({ shipment, carrier, onClose }) {
 
 function InfoRow({ label, value, style }) {
   return (
-    <div style={{ padding: "10px 14px", background: "#0d1117", borderRadius: 8, border: "1px solid #21262d", ...style }}>
-      <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 2 }}>{label.toUpperCase()}</div>
-      <div style={{ fontSize: 14, color: "#e6edf3" }}>{value}</div>
+    <div style={{ padding: "10px 14px", background: "#faf8f3", borderRadius: 3, border: "1px solid #c9c3b2", ...style }}>
+      <div style={{ fontSize: 11, color: "#555555", marginBottom: 2 }}>{label.toUpperCase()}</div>
+      <div style={{ fontSize: 14, color: "#1a1a1a" }}>{value}</div>
     </div>
   );
 }
@@ -1877,7 +1923,7 @@ function DetailTable({ flex, carrierAssignments, carriers }) {
         <select
           value={filterCarrier}
           onChange={(e) => setFilterCarrier(e.target.value)}
-          style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: 8, padding: "8px 12px", color: "#e6edf3", fontSize: 13, outline: "none", cursor: "pointer" }}
+          style={{ background: "#faf8f3", border: "1px solid #c9c3b2", borderRadius: 3, padding: "8px 12px", color: "#1a1a1a", fontSize: 13, outline: "none", cursor: "pointer" }}
         >
           <option value="all">Todos los transportistas</option>
           {carriers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -1886,7 +1932,7 @@ function DetailTable({ flex, carrierAssignments, carriers }) {
         <select
           value={filterTipo}
           onChange={(e) => setFilterTipo(e.target.value)}
-          style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: 8, padding: "8px 12px", color: "#e6edf3", fontSize: 13, outline: "none", cursor: "pointer" }}
+          style={{ background: "#faf8f3", border: "1px solid #c9c3b2", borderRadius: 3, padding: "8px 12px", color: "#1a1a1a", fontSize: 13, outline: "none", cursor: "pointer" }}
         >
           <option value="all">Todos los tipos</option>
           <option value="COMERCIAL">Comercial</option>
@@ -1898,37 +1944,37 @@ function DetailTable({ flex, carrierAssignments, carriers }) {
       </div>
 
       {/* Count */}
-      <div style={{ color: "#8b949e", fontSize: 12, marginBottom: 8 }}>
+      <div style={{ color: "#555555", fontSize: 12, marginBottom: 8 }}>
         Mostrando {filtered.length} de {flex.length} envío{flex.length !== 1 ? "s" : ""}
       </div>
 
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead>
-            <tr style={{ borderBottom: "1px solid #30363d" }}>
+            <tr style={{ borderBottom: "1px solid #c9c3b2" }}>
               {["#Envío", "CP", "Tipo", "Destinatario", "Localidad", "Items", "Transportista"].map((h) => (
-                <th key={h} style={{ textAlign: "left", padding: "8px 10px", color: "#8b949e", fontWeight: 600 }}>{h}</th>
+                <th key={h} style={{ textAlign: "left", padding: "10px 10px", color: "#1a1a1a", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", background: "#f0ece2", borderBottom: "2px solid #a8a08a" }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {filtered.map((s) => {
+            {filtered.map((s, idx) => {
               const assignedCarrier = getCarrier(s);
               return (
                 <tr
                   key={s.uid || s.envio}
                   onClick={() => setPreviewShipment(s)}
-                  style={{ borderBottom: "1px solid #21262d", cursor: "pointer", transition: "background .15s" }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = "#161b22"}
-                  onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                  style={{ borderBottom: "1px solid #e5e1d5", cursor: "pointer", transition: "background .1s", background: idx % 2 === 0 ? "#ffffff" : "#faf8f3" }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = "#fef3e7"}
+                  onMouseLeave={(e) => e.currentTarget.style.background = idx % 2 === 0 ? "#ffffff" : "#faf8f3"}
                 >
-                  <td style={{ padding: "8px 10px", color: "#e6edf3", fontFamily: "monospace" }}>{s.envio}</td>
+                  <td style={{ padding: "8px 10px", color: "#1a1a1a", fontFamily: "monospace" }}>{s.envio}</td>
                   <td style={{ padding: "8px 10px" }}><Badge color="blue">{s.cp}</Badge></td>
                   <td style={{ padding: "8px 10px" }}>
                     <Badge color={s.tipoEnvio === "COMERCIAL" ? "green" : "gray"}>{s.tipoEnvio || "—"}</Badge>
                   </td>
-                  <td style={{ padding: "8px 10px", color: "#c9d1d9", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.destinatario}</td>
-                  <td style={{ padding: "8px 10px", color: "#8b949e" }}>{s.localidad}</td>
+                  <td style={{ padding: "8px 10px", color: "#2a2a2a", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.destinatario}</td>
+                  <td style={{ padding: "8px 10px", color: "#555555" }}>{s.localidad}</td>
                   <td style={{ padding: "8px 10px" }}>
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                       {s.items.map((it, j) => (
@@ -1944,7 +1990,7 @@ function DetailTable({ flex, carrierAssignments, carriers }) {
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} style={{ padding: 20, textAlign: "center", color: "#484f58", fontSize: 13 }}>
+                <td colSpan={7} style={{ padding: 20, textAlign: "center", color: "#8a8a7e", fontSize: 13 }}>
                   No se encontraron envíos con esos filtros
                 </td>
               </tr>
@@ -1952,7 +1998,7 @@ function DetailTable({ flex, carrierAssignments, carriers }) {
           </tbody>
         </table>
       </div>
-      <p style={{ color: "#484f58", fontSize: 11, marginTop: 8, textAlign: "center" }}>
+      <p style={{ color: "#8a8a7e", fontSize: 11, marginTop: 8, textAlign: "center" }}>
         💡 Click en cualquier fila para ver los detalles completos
       </p>
       <LabelPreview
@@ -2166,13 +2212,13 @@ ${clientsHtml}
   };
 
   if (loading) {
-    return <Card><p style={{ textAlign: "center", color: "#484f58", padding: 40 }}>Cargando historial...</p></Card>;
+    return <Card><p style={{ textAlign: "center", color: "#8a8a7e", padding: 40 }}>Cargando historial...</p></Card>;
   }
 
   if (dates.length === 0) {
     return (
       <Card>
-        <p style={{ textAlign: "center", color: "#484f58", padding: 40 }}>
+        <p style={{ textAlign: "center", color: "#8a8a7e", padding: 40 }}>
           📚 Aún no hay entradas en el historial.<br/>
           <span style={{ fontSize: 12 }}>Cuando proceses archivos, las cargas se van a guardar automáticamente acá.</span>
         </p>
@@ -2190,10 +2236,10 @@ ${clientsHtml}
               key={d}
               onClick={() => setSelectedDate(d)}
               style={{
-                padding: "8px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer",
-                background: selectedDate === d ? "#1a2942" : "#0d1117",
-                color: selectedDate === d ? "#60a5fa" : "#8b949e",
-                border: `1px solid ${selectedDate === d ? "#2a4a6b" : "#21262d"}`,
+                padding: "8px 14px", borderRadius: 3, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                background: selectedDate === d ? "#e7eef5" : "#ffffff",
+                color: selectedDate === d ? "#1e3a5f" : "#555555",
+                border: `1px solid ${selectedDate === d ? "#c2cfde" : "#c9c3b2"}`,
               }}
             >
               {formatDate(d)}
@@ -2207,24 +2253,24 @@ ${clientsHtml}
         <>
           <Card title={`Resumen del ${formatDate(selectedDate)}`} icon="📊" accent="#4ade80">
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 14 }}>
-              <div style={{ padding: 12, background: "#0d1117", borderRadius: 8, border: "1px solid #21262d", textAlign: "center" }}>
-                <div style={{ fontSize: 24, fontWeight: 800, color: "#60a5fa" }}>{entries.length}</div>
-                <div style={{ fontSize: 11, color: "#8b949e" }}>Cargas</div>
+              <div style={{ padding: 12, background: "#faf8f3", borderRadius: 3, border: "1px solid #c9c3b2", textAlign: "center" }}>
+                <div style={{ fontSize: 24, fontWeight: 800, color: "#1e3a5f" }}>{entries.length}</div>
+                <div style={{ fontSize: 11, color: "#555555" }}>Cargas</div>
               </div>
-              <div style={{ padding: 12, background: "#0d1117", borderRadius: 8, border: "1px solid #21262d", textAlign: "center" }}>
-                <div style={{ fontSize: 24, fontWeight: 800, color: "#4ade80" }}>{Object.keys(byClient).length}</div>
-                <div style={{ fontSize: 11, color: "#8b949e" }}>Clientes</div>
+              <div style={{ padding: 12, background: "#faf8f3", borderRadius: 3, border: "1px solid #c9c3b2", textAlign: "center" }}>
+                <div style={{ fontSize: 24, fontWeight: 800, color: "#15803d" }}>{Object.keys(byClient).length}</div>
+                <div style={{ fontSize: 11, color: "#555555" }}>Clientes</div>
               </div>
-              <div style={{ padding: 12, background: "#0d1117", borderRadius: 8, border: "1px solid #21262d", textAlign: "center" }}>
-                <div style={{ fontSize: 24, fontWeight: 800, color: "#fb923c" }}>{entries.reduce((n, e) => n + (e.totals?.flex || 0), 0)}</div>
-                <div style={{ fontSize: 11, color: "#8b949e" }}>FLEX</div>
+              <div style={{ padding: 12, background: "#faf8f3", borderRadius: 3, border: "1px solid #c9c3b2", textAlign: "center" }}>
+                <div style={{ fontSize: 24, fontWeight: 800, color: "#b45309" }}>{entries.reduce((n, e) => n + (e.totals?.flex || 0), 0)}</div>
+                <div style={{ fontSize: 11, color: "#555555" }}>FLEX</div>
               </div>
-              <div style={{ padding: 12, background: "#0d1117", borderRadius: 8, border: "1px solid #21262d", textAlign: "center" }}>
-                <div style={{ fontSize: 24, fontWeight: 800, color: "#c084fc" }}>{entries.reduce((n, e) => n + (e.totals?.units || 0), 0)}</div>
-                <div style={{ fontSize: 11, color: "#8b949e" }}>Unidades</div>
+              <div style={{ padding: 12, background: "#faf8f3", borderRadius: 3, border: "1px solid #c9c3b2", textAlign: "center" }}>
+                <div style={{ fontSize: 24, fontWeight: 800, color: "#6b21a8" }}>{entries.reduce((n, e) => n + (e.totals?.units || 0), 0)}</div>
+                <div style={{ fontSize: 11, color: "#555555" }}>Unidades</div>
               </div>
             </div>
-            <Btn onClick={() => printDaySummary()} style={{ width: "100%", padding: "12px 20px", fontSize: 14, justifyContent: "center", borderRadius: 10 }}>
+            <Btn onClick={() => printDaySummary()} style={{ width: "100%", padding: "12px 20px", fontSize: 14, justifyContent: "center", borderRadius: 4 }}>
               🖨️ Imprimir resumen del día (todos los clientes)
             </Btn>
           </Card>
@@ -2233,7 +2279,7 @@ ${clientsHtml}
           {Object.entries(byClient).map(([client, list]) => (
             <Card key={client} title={`🏢 ${client}`} accent="#60a5fa">
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
-                <div style={{ fontSize: 12, color: "#8b949e" }}>
+                <div style={{ fontSize: 12, color: "#555555" }}>
                   {list.length} carga{list.length !== 1 ? "s" : ""} · {list.reduce((n, e) => n + (e.totals?.flex || 0), 0)} FLEX · {list.reduce((n, e) => n + (e.totals?.colecta || 0), 0)} COLECTA · {list.reduce((n, e) => n + (e.totals?.units || 0), 0)} unidades
                 </div>
                 <Btn small variant="secondary" onClick={() => printDaySummary(client)}>
@@ -2244,14 +2290,14 @@ ${clientsHtml}
                 {list.map((entry) => {
                   const time = new Date(entry.timestamp).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
                   return (
-                    <div key={entry.id} style={{ padding: "8px 12px", background: "#0d1117", borderRadius: 6, border: "1px solid #21262d", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <div key={entry.id} style={{ padding: "8px 12px", background: "#faf8f3", borderRadius: 3, border: "1px solid #c9c3b2", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                        <span style={{ color: "#8b949e", fontSize: 12, fontFamily: "monospace" }}>{time}</span>
+                        <span style={{ color: "#555555", fontSize: 12, fontFamily: "monospace" }}>{time}</span>
                         <Badge color="blue">{entry.totals?.flex || 0} FLEX</Badge>
                         {entry.totals?.colecta > 0 && <Badge color="orange">{entry.totals.colecta} COLECTA</Badge>}
                         <Badge color="purple">{entry.totals?.units || 0} u.</Badge>
                         {entry.carrierAssignments && entry.carrierAssignments.length > 0 && (
-                          <span style={{ color: "#484f58", fontSize: 11 }}>
+                          <span style={{ color: "#8a8a7e", fontSize: 11 }}>
                             → {entry.carrierAssignments.filter((ca) => ca.shipments.length > 0).map((ca) => `${ca.carrierName} (${ca.shipments.length})`).join(", ")}
                             {entry.extra && entry.extra.length > 0 ? `, EXTRA (${entry.extra.length})` : ""}
                           </span>
@@ -2310,27 +2356,30 @@ export default function App() {
   ];
 
   return (
-    <div style={{ fontFamily: "'Segoe UI', -apple-system, sans-serif", background: "#0d1117", color: "#e6edf3", minHeight: "100vh", padding: "20px 16px" }}>
-      <div style={{ maxWidth: 900, margin: "0 auto" }}>
-        {/* Header */}
-        <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 4px 0", background: "linear-gradient(135deg, #60a5fa, #4ade80)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-            GESTOR DE ETIQUETAS
+    <div style={{ fontFamily: "'Inter', 'Segoe UI', -apple-system, sans-serif", background: "#f5f2ea", color: "#1a1a1a", minHeight: "100vh", padding: "0" }}>
+      {/* App header bar */}
+      <header style={{ background: "#1a1a1a", color: "#fff", padding: "14px 24px", borderBottom: "3px solid #ea580c", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 8, height: 24, background: "#ea580c" }} />
+          <h1 style={{ fontSize: 16, fontWeight: 800, margin: 0, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Gestor de Etiquetas
           </h1>
-          <p style={{ color: "#484f58", fontSize: 13, margin: 0 }}>Procesá etiquetas de MercadoLibre y generá TXTs por transportista</p>
         </div>
+        <span style={{ fontSize: 11, color: "#aaa", letterSpacing: "0.04em", textTransform: "uppercase" }}>Sistema de gestión 3PL</span>
+      </header>
 
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "20px 16px" }}>
         <TabBar tabs={tabs} active={tab} onChange={setTab} />
 
         {tab === "upload" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <FileUpload onParsed={handleParsed} clients={clients} setClients={setClients} />
             {shipments && (
-              <div style={{ textAlign: "center", padding: 16, background: "#1a3328", borderRadius: 10, border: "1px solid #2a5a40" }}>
-                <span style={{ color: "#4ade80", fontWeight: 600 }}>
+              <div style={{ padding: "12px 16px", background: "#e8f3ec", borderRadius: 3, border: "1px solid #b5d4bf", borderLeft: "4px solid #15803d" }}>
+                <span style={{ color: "#15803d", fontWeight: 700, fontSize: 13 }}>
                   ✓ Archivo cargado ({currentClient}): {shipments.filter((s) => s.type === "FLEX").length} FLEX + {shipments.filter((s) => s.type === "COLECTA").length} COLECTA
                 </span>
-                <span style={{ color: "#8b949e", fontSize: 13 }}> — Ir a Resultados para ver el detalle</span>
+                <span style={{ color: "#555555", fontSize: 13 }}> — Ir a Resultados para ver el detalle</span>
               </div>
             )}
           </div>
@@ -2348,7 +2397,7 @@ export default function App() {
             <ResultsDashboard shipments={shipments} zones={zones} carriers={carriers} setZones={setZones} currentClient={currentClient} />
           ) : (
             <Card>
-              <p style={{ textAlign: "center", color: "#484f58", padding: 40 }}>
+              <p style={{ textAlign: "center", color: "#8a8a7e", padding: 40 }}>
                 Cargá un archivo primero en la pestaña "Cargar archivo"
               </p>
             </Card>
