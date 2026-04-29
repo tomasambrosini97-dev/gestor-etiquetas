@@ -2335,17 +2335,22 @@ function HistoryPanel({ zones = [] }) {
           noZoneCount++;
         }
       }
-      const zoneBreakdownHtml = (zones.length > 0 && allFlexShipments.length > 0)
-        ? `<div class="zone-breakdown">
-            <strong>FLEX por zona:</strong>
-            <div class="zone-grid">
-              ${zones.map((z) => {
-                const count = zoneCounts[z.name] || 0;
-                return `<span class="zone-item${count === 0 ? " empty" : ""}">${z.name}: <strong>${count}</strong></span>`;
-              }).join("")}
-              ${noZoneCount > 0 ? `<span class="zone-item warning">Sin zona: <strong>${noZoneCount}</strong></span>` : ""}
-            </div>
-          </div>`
+      const zoneBreakdownHtml = allFlexShipments.length > 0
+        ? (zones.length > 0
+            ? `<div class="zone-breakdown">
+                <strong>FLEX por zona:</strong>
+                <div class="zone-grid">
+                  ${zones.map((z) => {
+                    const count = zoneCounts[z.name] || 0;
+                    return `<span class="zone-item${count === 0 ? " empty" : ""}">${z.name}: <strong>${count}</strong></span>`;
+                  }).join("")}
+                  ${noZoneCount > 0 ? `<span class="zone-item warning">Sin zona: <strong>${noZoneCount}</strong></span>` : ""}
+                </div>
+              </div>`
+            : `<div class="zone-breakdown">
+                <strong>FLEX por zona:</strong>
+                <div style="color: #999; font-size: 12px; margin-top: 6px;">No hay zonas configuradas</div>
+              </div>`)
         : "";
 
       const skuTotals = {};
@@ -2565,26 +2570,32 @@ ${clientsHtml}
               </div>
 
               {/* Zone breakdown */}
-              {zones.length > 0 && totalFlexClient > 0 && (
+              {totalFlexClient > 0 && (
                 <div style={{ padding: "10px 12px", background: "#e7eef5", borderRadius: 3, border: "1px solid #c2cfde", borderLeft: "4px solid #1e3a5f", marginBottom: 10 }}>
                   <div style={{ color: "#1e3a5f", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>
                     FLEX por zona
                   </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {zones.map((z) => {
-                      const count = clientZoneCounts[z.name] || 0;
-                      return (
-                        <span key={z.id} style={{ padding: "3px 9px", background: count === 0 ? "#f0ece2" : "#ffffff", border: `1px solid ${count === 0 ? "#c9c3b2" : "#c2cfde"}`, borderRadius: 3, fontSize: 12, color: count === 0 ? "#7a7a6e" : "#1e3a5f" }}>
-                          {z.name}: <strong>{count}</strong>
+                  {zones.length === 0 ? (
+                    <div style={{ color: "#7a7a6e", fontSize: 12, fontStyle: "italic" }}>
+                      No hay zonas configuradas. Configurá zonas en Configuración para ver el desglose.
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {zones.map((z) => {
+                        const count = clientZoneCounts[z.name] || 0;
+                        return (
+                          <span key={z.id} style={{ padding: "3px 9px", background: count === 0 ? "#f0ece2" : "#ffffff", border: `1px solid ${count === 0 ? "#c9c3b2" : "#c2cfde"}`, borderRadius: 3, fontSize: 12, color: count === 0 ? "#7a7a6e" : "#1e3a5f" }}>
+                            {z.name}: <strong>{count}</strong>
+                          </span>
+                        );
+                      })}
+                      {clientNoZoneCount > 0 && (
+                        <span style={{ padding: "3px 9px", background: "#fbe9e9", border: "1px solid #e0b5b5", borderRadius: 3, fontSize: 12, color: "#b91c1c" }}>
+                          Sin zona: <strong>{clientNoZoneCount}</strong>
                         </span>
-                      );
-                    })}
-                    {clientNoZoneCount > 0 && (
-                      <span style={{ padding: "3px 9px", background: "#fbe9e9", border: "1px solid #e0b5b5", borderRadius: 3, fontSize: 12, color: "#b91c1c" }}>
-                        Sin zona: <strong>{clientNoZoneCount}</strong>
-                      </span>
-                    )}
-                  </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
