@@ -2108,7 +2108,7 @@ function DetailTable({ flex, carrierAssignments, carriers, externalFilterCarrier
     // Search filter
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      const haystack = [s.envio, s.cp, s.destinatario, s.localidad, ...(s.items || []).map((i) => i.sku)]
+      const haystack = [s.envio, s.cp, s.destinatario, s.direccion, s.localidad, ...(s.items || []).map((i) => i.sku)]
         .filter(Boolean).join(" ").toLowerCase();
       if (!haystack.includes(q)) return false;
     }
@@ -2167,7 +2167,7 @@ function DetailTable({ flex, carrierAssignments, carriers, externalFilterCarrier
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead style={{ position: "sticky", top: 0, zIndex: 1 }}>
             <tr>
-              {["#Envío", "CP", "Tipo", "Destinatario", "Localidad", "Items", "Transportista"].map((h) => (
+              {["#Envío", "CP", "Tipo", "Destinatario", "Dirección", "Localidad", "Items", "Transportista"].map((h) => (
                 <th key={h} style={{ textAlign: "left", padding: "10px 10px", color: "#1a1a1a", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", background: "#f0ece2", borderBottom: "2px solid #a8a08a" }}>{h}</th>
               ))}
             </tr>
@@ -2189,6 +2189,7 @@ function DetailTable({ flex, carrierAssignments, carriers, externalFilterCarrier
                     <Badge color={s.tipoEnvio === "COMERCIAL" ? "green" : "gray"}>{s.tipoEnvio || "—"}</Badge>
                   </td>
                   <td style={{ padding: "8px 10px", color: "#2a2a2a", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.destinatario}</td>
+                  <td style={{ padding: "8px 10px", color: "#2a2a2a", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={s.direccion || ""}>{s.direccion || "—"}</td>
                   <td style={{ padding: "8px 10px", color: "#555555" }}>{s.localidad}</td>
                   <td style={{ padding: "8px 10px" }}>
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
@@ -2205,7 +2206,7 @@ function DetailTable({ flex, carrierAssignments, carriers, externalFilterCarrier
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} style={{ padding: 20, textAlign: "center", color: "#8a8a7e", fontSize: 13 }}>
+                <td colSpan={8} style={{ padding: 20, textAlign: "center", color: "#8a8a7e", fontSize: 13 }}>
                   No se encontraron envíos con esos filtros
                 </td>
               </tr>
