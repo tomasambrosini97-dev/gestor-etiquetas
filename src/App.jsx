@@ -2227,7 +2227,7 @@ function DetailTable({ flex, carrierAssignments, carriers, externalFilterCarrier
 }
 
 // ─── History Panel ───
-function HistoryPanel() {
+function HistoryPanel({ zones = [] }) {
   const [dates, setDates] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
   const [entries, setEntries] = useState([]);
@@ -2299,6 +2299,7 @@ function HistoryPanel() {
       let allExtra = [];
       let allColecta = [];
       const allItems = [];
+      const allFlexShipments = []; // for zone breakdown
       let totalFlex = 0, totalColecta = 0, totalUnits = 0;
 
       for (const entry of list) {
@@ -2309,13 +2310,43 @@ function HistoryPanel() {
         for (const ca of (entry.carrierAssignments || [])) {
           if (!allCarrierAssignments[ca.carrierName]) allCarrierAssignments[ca.carrierName] = [];
           allCarrierAssignments[ca.carrierName].push(...ca.shipments);
-          for (const s of ca.shipments) allItems.push(...(s.items || []));
+          for (const s of ca.shipments) {
+            allItems.push(...(s.items || []));
+            allFlexShipments.push(s);
+          }
         }
         allExtra = allExtra.concat(entry.extra || []);
         allColecta = allColecta.concat(entry.colecta || []);
-        for (const s of (entry.extra || [])) allItems.push(...(s.items || []));
+        for (const s of (entry.extra || [])) {
+          allItems.push(...(s.items || []));
+          allFlexShipments.push(s);
+        }
         for (const s of (entry.colecta || [])) allItems.push(...(s.items || []));
       }
+
+      // Compute FLEX by zone (using current zones config)
+      const zoneCounts = {};
+      let noZoneCount = 0;
+      for (const s of allFlexShipments) {
+        const zone = zones.find((z) => z.cps && z.cps.includes(s.cp));
+        if (zone) {
+          zoneCounts[zone.name] = (zoneCounts[zone.name] || 0) + 1;
+        } else {
+          noZoneCount++;
+        }
+      }
+      const zoneBreakdownHtml = (zones.length > 0 && allFlexShipments.length > 0)
+        ? `<div class="zone-breakdown">
+            <strong>FLEX por zona:</strong>
+            <div class="zone-grid">
+              ${zones.map((z) => {
+                const count = zoneCounts[z.name] || 0;
+                return `<span class="zone-item${count === 0 ? " empty" : ""}">${z.name}: <strong>${count}</strong></span>`;
+              }).join("")}
+              ${noZoneCount > 0 ? `<span class="zone-item warning">Sin zona: <strong>${noZoneCount}</strong></span>` : ""}
+            </div>
+          </div>`
+        : "";
 
       const skuTotals = {};
       for (const it of allItems) skuTotals[it.sku] = (skuTotals[it.sku] || 0) + it.qty;
@@ -2382,6 +2413,7 @@ function HistoryPanel() {
             <span><strong>${totalColecta}</strong> COLECTA</span>
             <span><strong>${totalUnits}</strong> unidades</span>
           </div>
+          ${zoneBreakdownHtml}
           ${carriersHtml}
           ${extraHtml}
           ${colectaHtml}
@@ -2414,6 +2446,11 @@ function HistoryPanel() {
   th { text-align: left; padding: 6px 8px; background: #f0f0f0; border-bottom: 1px solid #ccc; font-weight: 700; }
   td { padding: 6px 8px; border-bottom: 1px solid #eee; }
   .sku-summary { margin-top: 16px; padding: 12px 14px; background: white; border-radius: 6px; font-size: 13px; }
+  .zone-breakdown { margin: 0 0 16px 0; padding: 12px 14px; background: white; border-radius: 6px; font-size: 13px; border-left: 4px solid #1e3a5f; }
+  .zone-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .zone-item { padding: 4px 10px; background: #e7eef5; border-radius: 3px; font-size: 12px; color: #1e3a5f; }
+  .zone-item.empty { background: #f0f0f0; color: #999; }
+  .zone-item.warning { background: #fbe9e9; color: #b91c1c; }
   .sku-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
   .sku-item { padding: 3px 8px; background: #f0f0f0; border-radius: 3px; font-size: 11px; }
   .sku-item code { font-family: monospace; }
@@ -2499,16 +2536,58 @@ ${clientsHtml}
           </Card>
 
           {/* Entries by client */}
-          {Object.entries(byClient).map(([client, list]) => (
+          {Object.entries(byClient).map(([client, list]) => {
+            // Compute FLEX by zone for this client across all entries
+            const clientZoneCounts = {};
+            let clientNoZoneCount = 0;
+            for (const entry of list) {
+              const flexShipments = [
+                ...(entry.carrierAssignments || []).flatMap((ca) => ca.shipments || []),
+                ...(entry.extra || []),
+              ];
+              for (const s of flexShipments) {
+                const zone = zones.find((z) => z.cps && z.cps.includes(s.cp));
+                if (zone) clientZoneCounts[zone.name] = (clientZoneCounts[zone.name] || 0) + 1;
+                else clientNoZoneCount++;
+              }
+            }
+            const totalFlexClient = list.reduce((n, e) => n + (e.totals?.flex || 0), 0);
+
+            return (
             <Card key={client} title={`🏢 ${client}`} accent="#60a5fa">
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
                 <div style={{ fontSize: 12, color: "#555555" }}>
-                  {list.length} carga{list.length !== 1 ? "s" : ""} · {list.reduce((n, e) => n + (e.totals?.flex || 0), 0)} FLEX · {list.reduce((n, e) => n + (e.totals?.colecta || 0), 0)} COLECTA · {list.reduce((n, e) => n + (e.totals?.units || 0), 0)} unidades
+                  {list.length} carga{list.length !== 1 ? "s" : ""} · {totalFlexClient} FLEX · {list.reduce((n, e) => n + (e.totals?.colecta || 0), 0)} COLECTA · {list.reduce((n, e) => n + (e.totals?.units || 0), 0)} unidades
                 </div>
                 <Btn small variant="secondary" onClick={() => printDaySummary(client)}>
                   🖨️ Imprimir este cliente
                 </Btn>
               </div>
+
+              {/* Zone breakdown */}
+              {zones.length > 0 && totalFlexClient > 0 && (
+                <div style={{ padding: "10px 12px", background: "#e7eef5", borderRadius: 3, border: "1px solid #c2cfde", borderLeft: "4px solid #1e3a5f", marginBottom: 10 }}>
+                  <div style={{ color: "#1e3a5f", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>
+                    FLEX por zona
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {zones.map((z) => {
+                      const count = clientZoneCounts[z.name] || 0;
+                      return (
+                        <span key={z.id} style={{ padding: "3px 9px", background: count === 0 ? "#f0ece2" : "#ffffff", border: `1px solid ${count === 0 ? "#c9c3b2" : "#c2cfde"}`, borderRadius: 3, fontSize: 12, color: count === 0 ? "#7a7a6e" : "#1e3a5f" }}>
+                          {z.name}: <strong>{count}</strong>
+                        </span>
+                      );
+                    })}
+                    {clientNoZoneCount > 0 && (
+                      <span style={{ padding: "3px 9px", background: "#fbe9e9", border: "1px solid #e0b5b5", borderRadius: 3, fontSize: 12, color: "#b91c1c" }}>
+                        Sin zona: <strong>{clientNoZoneCount}</strong>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {list.map((entry) => {
                   const time = new Date(entry.timestamp).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
@@ -2532,7 +2611,8 @@ ${clientsHtml}
                 })}
               </div>
             </Card>
-          ))}
+            );
+          })}
         </>
       )}
     </div>
@@ -2664,7 +2744,7 @@ export default function App() {
         )}
 
         {tab === "history" && (
-          <HistoryPanel />
+          <HistoryPanel zones={zones} />
         )}
       </div>
       <ToastContainer />
