@@ -67,7 +67,25 @@ function parseZPL(text) {
   const allLabels = text.match(/\^XA[\s\S]*?\^XZ/g);
   if (!allLabels) return shipments;
 
-  const cleanText = (s) => s ? s.replace(/_C3_[A-F0-9]{2}/g, "").replace(/_2E/g, ".").replace(/_2D/g, "-").replace(/_20/g, " ").trim() : s;
+  // Decode ZPL escape sequences:
+  // - _C3_XX → UTF-8 two-byte sequence (Spanish accents)
+  // - _XX where XX is hex → ASCII char (e.g. _2D → "-", _2E → ".", _20 → " ")
+  const cleanText = (s) => {
+    if (!s) return s;
+    return s
+      // Spanish accents (UTF-8 encoded as _C3_XX)
+      .replace(/_C3_A1/gi, "á").replace(/_C3_A9/gi, "é").replace(/_C3_AD/gi, "í")
+      .replace(/_C3_B3/gi, "ó").replace(/_C3_BA/gi, "ú").replace(/_C3_B1/gi, "ñ")
+      .replace(/_C3_81/gi, "Á").replace(/_C3_89/gi, "É").replace(/_C3_8D/gi, "Í")
+      .replace(/_C3_93/gi, "Ó").replace(/_C3_9A/gi, "Ú").replace(/_C3_91/gi, "Ñ")
+      .replace(/_C3_BC/gi, "ü").replace(/_C3_9C/gi, "Ü")
+      // Generic hex escape for any remaining _XX
+      .replace(/_([0-9A-F]{2})/gi, (_, hex) => {
+        const code = parseInt(hex, 16);
+        return code >= 32 && code < 127 ? String.fromCharCode(code) : "";
+      })
+      .trim();
+  };
 
   for (const lab of allLabels) {
     // Skip page break commands
@@ -78,7 +96,7 @@ function parseZPL(text) {
     if (!skuM) continue;
 
     const qtyM = lab.match(/FO10,130.*?FD(\d+)/);
-    const sku = skuM[1].trim();
+    const sku = cleanText(skuM[1]);
     const qty = qtyM ? parseInt(qtyM[1]) : 1;
 
     const isFlex = lab.includes("Flex");
