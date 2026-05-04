@@ -1376,7 +1376,7 @@ function UnassignedCPs({ noZoneShipments, zones, setZones }) {
 }
 
 // ─── Results Dashboard ───
-function ResultsDashboard({ shipments, zones, carriers, setZones, currentClient }) {
+function ResultsDashboard({ shipments, zones, carriers, setZones, currentClient, savedToHistory, setSavedToHistory }) {
   const flex = shipments.filter((s) => s.type === "FLEX");
   const colecta = shipments.filter((s) => s.type === "COLECTA");
 
@@ -1384,13 +1384,11 @@ function ResultsDashboard({ shipments, zones, carriers, setZones, currentClient 
   const [manualOverrides, setManualOverrides] = useState({});
   const [carrierFilter, setCarrierFilter] = useState(null); // null | "all" | "extra" | carrierId
   const [selectedEnvios, setSelectedEnvios] = useState(new Set());
-  const [savedToHistory, setSavedToHistory] = useState(false);
   const [savingHistory, setSavingHistory] = useState(false);
 
-  // Reset overrides and saved state when shipments change (new file loaded)
+  // Reset overrides and selection when shipments change (new file loaded)
   useEffect(() => {
     setManualOverrides({});
-    setSavedToHistory(false);
     setSelectedEnvios(new Set());
   }, [shipments]);
 
@@ -2786,6 +2784,7 @@ export default function App() {
   const [carriers, setCarriers] = useState([]);
   const [shipments, setShipments] = useState(null);
   const [currentClient, setCurrentClient] = useState(null);
+  const [savedToHistory, setSavedToHistory] = useState(false);
   const [clients, setClients] = useState([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -2808,6 +2807,7 @@ export default function App() {
   const handleParsed = (s, clientName) => {
     setShipments(s);
     setCurrentClient(clientName || "Sin asignar");
+    setSavedToHistory(false);
     setTab("results");
   };
 
@@ -2893,7 +2893,7 @@ export default function App() {
 
         {tab === "results" && (
           shipments ? (
-            <ResultsDashboard shipments={shipments} zones={zones} carriers={carriers} setZones={setZones} currentClient={currentClient} />
+            <ResultsDashboard shipments={shipments} zones={zones} carriers={carriers} setZones={setZones} currentClient={currentClient} savedToHistory={savedToHistory} setSavedToHistory={setSavedToHistory} />
           ) : (
             <Card>
               <p style={{ textAlign: "center", color: "#8a8a7e", padding: 40 }}>
