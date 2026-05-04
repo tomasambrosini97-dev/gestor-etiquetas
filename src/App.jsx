@@ -733,12 +733,25 @@ function CarrierCard({ carrier, onRemove, onUpdate, zones }) {
 
   const saveZoneLimits = () => {
     const limits = {};
+    const totalLimit = carrier.limit; // current total cap (could be undefined = no cap)
+    let capped = false;
     Object.entries(zoneLimitsInput).forEach(([id, val]) => {
       const num = parseInt(val);
-      if (!isNaN(num) && num > 0) limits[id] = num;
+      if (!isNaN(num) && num > 0) {
+        // Cap zone limit to total limit (if total is set)
+        if (totalLimit && num > totalLimit) {
+          limits[id] = totalLimit;
+          capped = true;
+        } else {
+          limits[id] = num;
+        }
+      }
     });
     onUpdate({ ...carrier, zoneLimits: limits });
     setEditingZoneLimits(false);
+    if (capped) {
+      toast(`Algunos topes por zona superaban el tope total (${totalLimit}) y se ajustaron`, "info");
+    }
   };
 
   const prio = carrier.priority || "COMERCIAL";
@@ -762,7 +775,20 @@ function CarrierCard({ carrier, onRemove, onUpdate, zones }) {
               />
               <Btn small onClick={() => {
                 const num = parseInt(totalLimitInput);
-                onUpdate({ ...carrier, limit: (!isNaN(num) && num > 0) ? num : null });
+                const newLimit = (!isNaN(num) && num > 0) ? num : null;
+                // If new total is set and lower than some zone limits, cap them
+                let updated = { ...carrier, limit: newLimit };
+                if (newLimit && carrier.zoneLimits) {
+                  const newZL = {};
+                  let capped = false;
+                  Object.entries(carrier.zoneLimits).forEach(([zid, lim]) => {
+                    if (lim > newLimit) { newZL[zid] = newLimit; capped = true; }
+                    else { newZL[zid] = lim; }
+                  });
+                  updated.zoneLimits = newZL;
+                  if (capped) toast(`Topes de zona ajustados al nuevo tope total (${newLimit})`, "info");
+                }
+                onUpdate(updated);
                 setEditingTotalLimit(false);
               }}>OK</Btn>
               <Btn small variant="ghost" onClick={() => setEditingTotalLimit(false)}>✕</Btn>
@@ -831,7 +857,9 @@ function CarrierCard({ carrier, onRemove, onUpdate, zones }) {
         <div style={{ marginTop: 6, padding: "8px 10px", background: "#ffffff", borderRadius: 3, border: "1px solid #c9c3b2" }}>
           {editingZoneLimits ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <span style={{ color: "#b45309", fontSize: 12, fontWeight: 600 }}>Topes por zona:</span>
+              <span style={{ color: "#b45309", fontSize: 12, fontWeight: 600 }}>
+                Topes por zona{carrier.limit ? ` (máx ${carrier.limit})` : ""}:
+              </span>
               {zones.map((z) => (
                 <div key={z.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ color: "#2a2a2a", fontSize: 12, minWidth: 80 }}>{z.name}:</span>
@@ -844,6 +872,11 @@ function CarrierCard({ carrier, onRemove, onUpdate, zones }) {
                   />
                 </div>
               ))}
+              {!carrier.limit && (
+                <div style={{ color: "#7a7a6e", fontSize: 11, fontStyle: "italic" }}>
+                  ⓘ Configurá un tope total primero para limitar los topes por zona
+                </div>
+              )}
               <div style={{ display: "flex", gap: 4, marginTop: 2 }}>
                 <Btn small onClick={saveZoneLimits}>Guardar</Btn>
                 <Btn small variant="ghost" onClick={() => setEditingZoneLimits(false)}>Cancelar</Btn>
@@ -1151,18 +1184,80 @@ function FileUpload({ onParsed, clients, setClients }) {
 }
 
 // ─── Envio Chip (movable) ───
-function EnvioChip({ shipment, currentLocation, carriers, isOverride, onMove, onClearOverride }) {
+// ─── Bulk move bar ───
+function BulkMoveBar({ count, carriers, onMove, onClear }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  return (
+    <div style={{ position: "sticky", top: 0, zIndex: 5, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "#fef3e7", border: "2px solid #ea580c", borderRadius: 4, marginBottom: 10, boxShadow: "0 2px 6px rgba(234,88,12,0.15)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ color: "#c2410c", fontSize: 13, fontWeight: 700 }}>
+          ☑ {count} envío{count !== 1 ? "s" : ""} seleccionado{count !== 1 ? "s" : ""}
+        </span>
+        <Btn small variant="ghost" onClick={onClear}>Limpiar selección</Btn>
+      </div>
+      <div style={{ position: "relative" }}>
+        <Btn small variant="primary" onClick={() => setMenuOpen(!menuOpen)}>
+          Mover a... ▾
+        </Btn>
+        {menuOpen && (
+          <>
+            <div onClick={() => setMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 10 }} />
+            <div style={{
+              position: "absolute", top: "100%", right: 0, marginTop: 4, zIndex: 11,
+              background: "#ffffff", border: "1px solid #c9c3b2", borderRadius: 3, padding: 4,
+              minWidth: 180, boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+            }}>
+              {carriers.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => { onMove(c.id); setMenuOpen(false); }}
+                  style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 10px", background: "none", border: "none", color: "#1a1a1a", fontSize: 12, cursor: "pointer", borderRadius: 3 }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = "#f0ece2"}
+                  onMouseLeave={(e) => e.currentTarget.style.background = "none"}
+                >
+                  → {c.name}
+                </button>
+              ))}
+              <div style={{ height: 1, background: "#c9c3b2", margin: "4px 0" }} />
+              <button
+                onClick={() => { onMove("EXTRA"); setMenuOpen(false); }}
+                style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 10px", background: "none", border: "none", color: "#b91c1c", fontSize: 12, cursor: "pointer", borderRadius: 3, fontWeight: 700 }}
+                onMouseEnter={(e) => e.currentTarget.style.background = "#fbe9e9"}
+                onMouseLeave={(e) => e.currentTarget.style.background = "none"}
+              >
+                → EXTRA
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EnvioChip({ shipment, currentLocation, carriers, isOverride, onMove, onClearOverride, selected, onToggleSelect }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const label = `CP ${shipment.cp} → ${shipment.destinatario || shipment.envio || "Colecta"}`;
   const otherCarriers = carriers.filter((c) => c.id !== currentLocation);
 
   return (
     <div style={{
-      fontSize: 11, color: "#555555", background: isOverride ? "#f1e7f7" : "#ffffff",
-      padding: "4px 8px", borderRadius: 4, border: `1px solid ${isOverride ? "#d5b9df" : "#c9c3b2"}`,
+      fontSize: 11, color: "#555555",
+      background: selected ? "#fef3e7" : (isOverride ? "#f1e7f7" : "#ffffff"),
+      padding: "4px 8px", borderRadius: 4,
+      border: `1px solid ${selected ? "#ea580c" : (isOverride ? "#d5b9df" : "#c9c3b2")}`,
       display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+        {shipment.envio && onToggleSelect && (
+          <input
+            type="checkbox"
+            checked={!!selected}
+            onChange={() => onToggleSelect(shipment.envio)}
+            style={{ cursor: "pointer", accentColor: "#ea580c", flexShrink: 0 }}
+            title="Seleccionar para mover en bloque"
+          />
+        )}
         {isOverride && <span style={{ color: "#6b21a8", fontSize: 10 }} title="Movido manualmente">✎</span>}
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
       </div>
@@ -1288,6 +1383,7 @@ function ResultsDashboard({ shipments, zones, carriers, setZones, currentClient 
   // Manual overrides: envio -> carrierId | "EXTRA"
   const [manualOverrides, setManualOverrides] = useState({});
   const [carrierFilter, setCarrierFilter] = useState(null); // null | "all" | "extra" | carrierId
+  const [selectedEnvios, setSelectedEnvios] = useState(new Set());
   const [savedToHistory, setSavedToHistory] = useState(false);
   const [savingHistory, setSavingHistory] = useState(false);
 
@@ -1295,11 +1391,33 @@ function ResultsDashboard({ shipments, zones, carriers, setZones, currentClient 
   useEffect(() => {
     setManualOverrides({});
     setSavedToHistory(false);
+    setSelectedEnvios(new Set());
   }, [shipments]);
 
   const moveEnvio = (envio, target) => {
     setManualOverrides((prev) => ({ ...prev, [envio]: target }));
   };
+  const moveSelectedEnvios = (target) => {
+    if (selectedEnvios.size === 0) return;
+    setManualOverrides((prev) => {
+      const next = { ...prev };
+      for (const envio of selectedEnvios) next[envio] = target;
+      return next;
+    });
+    const count = selectedEnvios.size;
+    setSelectedEnvios(new Set());
+    const targetName = target === "EXTRA" ? "EXTRA" : (carriers.find((c) => String(c.id) === String(target))?.name || "?");
+    toast(`✓ ${count} envío${count !== 1 ? "s" : ""} movido${count !== 1 ? "s" : ""} a ${targetName}`);
+  };
+  const toggleSelectEnvio = (envio) => {
+    setSelectedEnvios((prev) => {
+      const next = new Set(prev);
+      if (next.has(envio)) next.delete(envio);
+      else next.add(envio);
+      return next;
+    });
+  };
+  const clearSelection = () => setSelectedEnvios(new Set());
   const clearOverride = (envio) => {
     setManualOverrides((prev) => {
       const next = { ...prev };
@@ -1814,6 +1932,14 @@ ${carriers.length > 0 ? `
 
       {/* Carrier assignment */}
       <Card title="Asignación por transportista" icon="🚛" accent="#4ade80">
+        {selectedEnvios.size > 0 && (
+          <BulkMoveBar
+            count={selectedEnvios.size}
+            carriers={carriers}
+            onMove={moveSelectedEnvios}
+            onClear={clearSelection}
+          />
+        )}
         {Object.keys(manualOverrides).length > 0 && (
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "#f1e7f7", border: "1px solid #d5b9df", borderRadius: 3, marginBottom: 10 }}>
             <span style={{ color: "#6b21a8", fontSize: 12 }}>
@@ -1873,6 +1999,8 @@ ${carriers.length > 0 ? `
                         isOverride={!!manualOverrides[s.envio]}
                         onMove={(target) => moveEnvio(s.envio, target)}
                         onClearOverride={() => clearOverride(s.envio)}
+                        selected={selectedEnvios.has(s.envio)}
+                        onToggleSelect={toggleSelectEnvio}
                       />
                     ))}
                   </div>
@@ -1928,6 +2056,8 @@ ${carriers.length > 0 ? `
                       isOverride={s.envio && !!manualOverrides[s.envio]}
                       onMove={(target) => s.envio && moveEnvio(s.envio, target)}
                       onClearOverride={() => s.envio && clearOverride(s.envio)}
+                      selected={s.envio && selectedEnvios.has(s.envio)}
+                      onToggleSelect={s.envio ? toggleSelectEnvio : null}
                     />
                   ))}
                 </div>
