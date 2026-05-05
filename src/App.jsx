@@ -1803,6 +1803,108 @@ ${carriers.length > 0 ? `
     if (win) { win.document.write(html); win.document.close(); }
   };
 
+  // Printable tickeable SKU checklist (FLEX and COLECTA separated)
+  const printSkuChecklist = () => {
+    const flexItems = flex.flatMap((s) => s.items);
+    const colectaItems = colecta.flatMap((s) => s.items);
+
+    const flexTotals = {};
+    for (const it of flexItems) flexTotals[it.sku] = (flexTotals[it.sku] || 0) + it.qty;
+    const colectaTotals = {};
+    for (const it of colectaItems) colectaTotals[it.sku] = (colectaTotals[it.sku] || 0) + it.qty;
+
+    const renderSection = (title, totals, color) => {
+      const entries = Object.entries(totals).sort((a, b) => a[0].localeCompare(b[0]));
+      if (entries.length === 0) return "";
+      const totalUnits = entries.reduce((n, [_, q]) => n + q, 0);
+      return `
+        <div class="sku-section">
+          <h2 class="sku-section-title" style="border-left-color: ${color};">${title} <span class="muted">(${entries.length} SKUs · ${totalUnits} unidades)</span></h2>
+          <table class="checklist">
+            <thead><tr><th class="check-col">✓</th><th>SKU</th><th class="qty-col">Cantidad</th></tr></thead>
+            <tbody>
+              ${entries.map(([sku, qty]) => `
+                <tr>
+                  <td class="check-col"><div class="checkbox"></div></td>
+                  <td class="sku-cell">${sku}</td>
+                  <td class="qty-col"><strong>${qty}</strong></td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      `;
+    };
+
+    const html = `<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"><title>Checklist SKUs - ${currentClient || "Sin asignar"} - ${today}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", sans-serif; color: #222; margin: 0; padding: 24px; }
+  h1 { margin: 0 0 4px 0; font-size: 22px; }
+  .subtitle { color: #666; font-size: 13px; margin-bottom: 20px; }
+  .meta-row { display: flex; gap: 18px; padding: 10px 14px; background: #f5f5f5; border-radius: 6px; margin-bottom: 22px; font-size: 13px; }
+  .meta-row strong { color: #1a1a1a; }
+  .sku-section { margin-bottom: 30px; page-break-inside: avoid; }
+  .sku-section-title { font-size: 16px; margin: 0 0 10px 0; padding: 6px 0 6px 12px; border-left: 5px solid #ccc; }
+  .muted { font-weight: normal; color: #777; font-size: 12px; }
+  table.checklist { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.checklist th { text-align: left; padding: 8px 10px; background: #f0f0f0; border-bottom: 2px solid #999; font-weight: 700; }
+  table.checklist td { padding: 10px 10px; border-bottom: 1px solid #ddd; }
+  table.checklist tr:nth-child(even) td { background: #fafafa; }
+  .check-col { width: 38px; text-align: center; }
+  .qty-col { width: 90px; text-align: right; font-size: 15px; }
+  .sku-cell { font-family: monospace; font-size: 14px; }
+  .checkbox { width: 18px; height: 18px; border: 2px solid #1a1a1a; border-radius: 3px; margin: 0 auto; background: white; }
+  .footer { margin-top: 30px; padding-top: 12px; border-top: 1px solid #ddd; font-size: 11px; color: #999; text-align: center; }
+  @media print { body { padding: 12px; } .no-print { display: none; } }
+  .no-print { position: fixed; top: 10px; right: 10px; }
+  .no-print button { background: #1a1a1a; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; }
+</style></head>
+<body>
+<div class="no-print"><button onclick="window.print()">🖨️ Imprimir / Guardar PDF</button></div>
+<h1>Checklist de productos</h1>
+<div class="subtitle">${currentClient || "Sin asignar"} · ${today}</div>
+
+<div class="meta-row">
+  <span><strong>${flex.length}</strong> envíos FLEX</span>
+  <span><strong>${colecta.length}</strong> órdenes COLECTA</span>
+  <span><strong>${flexItems.length + colectaItems.length}</strong> ítems totales</span>
+</div>
+
+${renderSection("📦 FLEX", flexTotals, "#1e3a5f")}
+${renderSection("📋 COLECTA", colectaTotals, "#b45309")}
+
+${(Object.keys(flexTotals).length === 0 && Object.keys(colectaTotals).length === 0) ? '<p style="color: #999; text-align: center; padding: 40px;">No hay productos para listar.</p>' : ""}
+
+<div class="footer">Generado el ${new Date().toLocaleString("es-AR")}</div>
+</body></html>`;
+
+    const win = window.open("", "_blank");
+    if (win) { win.document.write(html); win.document.close(); }
+    toast("✓ Checklist abierto");
+  };
+
+  // Download full TXT (all original labels) sorted alphabetically by SKU
+  const downloadTxtSortedBySku = () => {
+    const pairs = [];
+    for (const s of shipments) {
+      const sku = (s.items && s.items[0] && s.items[0].sku) || "ZZZZ";
+      for (const lab of (s.rawLabels || [])) {
+        pairs.push({ sku, label: lab });
+      }
+    }
+    if (pairs.length === 0) {
+      toast("No hay etiquetas para exportar", "error");
+      return;
+    }
+    pairs.sort((a, b) => a.sku.localeCompare(b.sku));
+    const allLabels = pairs.map((p) => p.label);
+    const content = allLabels.join("\n^XA^MCY^XZ\n") + "\n^XA^MCY^XZ\n";
+    const filename = `${(currentClient || "envios").replace(/\s+/g, "_")}_ordenado_por_SKU.txt`;
+    download(filename, content);
+  };
+
   // Save current state to history
   const saveToHistory = async (manual = false) => {
     setSavingHistory(true);
@@ -1926,6 +2028,16 @@ ${carriers.length > 0 ? `
           ))}
           {allItems.length === 0 && <p style={{ color: "#8a8a7e", fontSize: 13 }}>—</p>}
         </div>
+        {allItems.length > 0 && (
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #c9c3b2", display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <Btn small variant="secondary" onClick={printSkuChecklist}>
+              ☑ Checklist imprimible
+            </Btn>
+            <Btn small variant="secondary" onClick={downloadTxtSortedBySku}>
+              ⬇ TXT ordenado por SKU
+            </Btn>
+          </div>
+        )}
       </Card>
 
       {/* Carrier assignment */}
